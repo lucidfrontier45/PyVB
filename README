@@ -1,0 +1,5 @@
+This is a python implementation for Variational Bayesian Learning.
+Currently Gaussian Mixture Model (VBGMM) and Hidden Markov Model (VBHMM)
+are supported.
+Forward-Backward routines in HMM are accelerated by Fortran 90 with f2py.
+Numpy/Scipy and scikits.learn is needed.
