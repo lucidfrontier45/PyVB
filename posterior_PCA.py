@@ -19,5 +19,5 @@ crd,misc,rmsds = readPDBlist(pdblist,refPDB)
 eig_val,eig_vec, pcrds  = posteriorPCA(crd,z)
 trj = _moveCrd(refPDB,eigval[0],eig_vec[:,0],maxd=eig_val[0])
 for i in range(len(trj)):
-  log_name = "PDB.%03d" % i
-  writePDBFile(log_name,trj[i],misc)
+    log_name = "PDB.%03d" % i
+    writePDBFile(log_name,trj[i],misc)

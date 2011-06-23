@@ -1,7 +1,6 @@
 import numpy as np
 from scipy.special import gammaln,digamma
 from scipy.linalg import inv, det, solve
-from scikits.learn.mixture import lmvnpdf
 
 def lmvnpdf2(obs,m,cv,nu,beta):
   """

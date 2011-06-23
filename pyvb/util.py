@@ -1,66 +1,109 @@
 import numpy as np
 from scipy.special import gammaln
-from scipy.linalg import  eigh
-from scikits.learn.mixture import logsum, normalize
+from scipy.linalg import  eigh, cholesky, solve, det
 import pylab
 
+def logsum(A, axis=None):
+    """Computes the sum of A assuming A is in the log domain.
+
+    Returns log(sum(exp(A), axis)) while minimizing the possibility of
+    over/underflow.
+    """
+    Amax = A.max(axis)
+    if axis and A.ndim > 1:
+        shape = list(A.shape)
+        shape[axis] = 1
+        Amax.shape = shape
+    Asum = np.log(np.sum(np.exp(A - Amax), axis))
+    Asum += Amax.reshape(Asum.shape)
+    if axis:
+        # Look out for underflow.
+        Asum[np.isnan(Asum)] = - np.Inf
+    return Asum
+
+def normalize(A, axis=None):
+    A += np.finfo(float).eps
+    Asum = A.sum(axis)
+    if axis and A.ndim > 1:
+        # Make sure we don't divide by zero.
+        Asum[Asum == 0] = 1
+        shape = list(A.shape)
+        shape[axis] = 1
+        Asum.shape = shape
+    return A / Asum
+    
+def log_like_Gauss(obs, m, cv):
+    """
+    Log probability for full covariance matrices.
+    """
+    nobs, ndim = obs.shape
+    nmix = len(m)
+    lnf = np.empty((nobs, nmix))
+    for k in xrange(nmix):
+        cv_chol = cholesky(cv[k], lower=True)
+        cv_sol = solve(cv_chol, (obs - m[k]).T, lower=True).T
+        lndetV = np.log(det(cv[k]))
+        lnf[:, k] = -0.5 * (ndim * np.log(2.0 * np.pi) + lndetV \
+            + np.sum(cv_sol ** 2, axis=1))
+    return lnf
+
 def cnormalize(X):
-  """
-  Z transformation
-  """
-  return (X - np.mean(X,0)) / np.std(X,0)
+    """
+    Z transformation
+    """
+    return (X - np.mean(X,0)) / np.std(X,0)
 
 def correct_k(k,m):
-  """
-  Poisson prior for P(Model)
-  input
-    k [int] : number of clusters
-    m [int] : poisson parameter
-  output
-    log-likelihood
-  """
-  return k * np.log(m) - m - 2.0 * gammaln(k+1)
+    """
+    Poisson prior for P(Model)
+    input
+        k [int] : number of clusters
+        m [int] : poisson parameter
+    output
+        log-likelihood
+    """
+    return k * np.log(m) - m - 2.0 * gammaln(k+1)
 
 def complexity_GMM(k,d):
-  """
-  count number of parameters for Gaussian Mixture Model in d-dimension
-  with k clusters.
-  input
-    k [int] : number of clusters
-    d [int] : dimension of data
-  """
-  return k * (1.0 * 0.5 * d * (d + 3.0))
+    """
+    count number of parameters for Gaussian Mixture Model in d-dimension
+    with k clusters.
+    input
+        k [int] : number of clusters
+        d [int] : dimension of data
+    """
+    return k * (1.0 * 0.5 * d * (d + 3.0))
 
 def ica(X):
-  """
-  Wrapper function for Independent Component Analysis of scikits.learn.decomposition
-  """
-  from scikits.learn.decomposition import FastICA
-  ica = FastICA()
-  ica.fit(X.T)
-  Y = ica.transform(X.T).T
-  return Y / Y.std(0)
+    """
+    Wrapper function for Independent Component Analysis of scikits.learn.decomposition
+    """
+    from scikits.learn.decomposition import FastICA
+    ica = FastICA()
+    ica.fit(X.T)
+    Y = ica.transform(X.T).T
+    return Y / Y.std(0)
 
 
 def posteriorPCA(x,z,npcs=5):
-  """
-  Weighted Principal Component Analysis with Posterior Probability
-  input
-    x [ndarray, shape (n x dim)] : observed data
-    z [ndarray, shape (n x nmix)] : posterior probability
-    npc [int] : number of principal components to be returned
-  output
-    eig_val [ndarray, shape (npcs)] : eigenvalues
-    eig_vec [ndarray, shape (npcs x dim)] : eigenvectors
-    PC [ndarray, shape (n x npcs)] : principal components
-  """
-  N = z.sum() # observed number of this cluster
-  xbar = np.dot(z,x) / N # weighted mean vector
-  dx = x - xbar
-  C = np.dot((z*dx.T),dx) / (N-1) # weighted covariance matrix
-  eig_val, eig_vec = eigh(-C,eigvals=(1,npcs)) # eigen decomposition
-  PC = np.dot(dx,eig_vec)
-  return -eig_val, eig_vec, PC
+    """
+    Weighted Principal Component Analysis with Posterior Probability
+    input
+      x [ndarray, shape (n x dim)] : observed data
+      z [ndarray, shape (n x nmix)] : posterior probability
+      npc [int] : number of principal components to be returned
+    output
+      eig_val [ndarray, shape (npcs)] : eigenvalues
+      eig_vec [ndarray, shape (npcs x dim)] : eigenvectors
+      PC [ndarray, shape (n x npcs)] : principal components
+    """
+    N = z.sum() # observed number of this cluster
+    xbar = np.dot(z,x) / N # weighted mean vector
+    dx = x - xbar
+    C = np.dot((z*dx.T),dx) / (N-1) # weighted covariance matrix
+    eig_val, eig_vec = eigh(-C,eigvals=(1,npcs)) # eigen decomposition
+    PC = np.dot(dx,eig_vec)
+    return -eig_val, eig_vec, PC
 
 def similarity_of_hidden_states(z):
     return np.dot(z.T,z) / z.sum(0)[:,np.newaxis]
