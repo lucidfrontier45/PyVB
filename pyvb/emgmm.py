@@ -21,7 +21,7 @@ class EMGMM:
         self._init_prior(obs)
         self._init_posterior(obs)
         
-        self._C = np.empty((self._nstates,nmix,ndim,ndim))
+        self._C = np.empty((nmix,ndim,ndim))
 
     def _init_prior(self,obs):
         pass
@@ -32,7 +32,7 @@ class EMGMM:
         self.z = np.ones((nobs,nmix)) / float(nmix)
         self.pi = np.ones(nmix) / float(nmix)
         self.m, temp = vq.kmeans2(obs,nmix)
-        self.cv = np.tile(np.cov(obs.T),(nmix,1,1))
+        self.cv = np.tile(np.cov(obs.T),(nmix,1,1)) * 10.0
           
     def showModel(self,show_m=False,show_cv=False,min_pi=0.01):
         """
@@ -62,7 +62,7 @@ class EMGMM:
     def eval_hidden_states(self,obs):
         lnf = self._log_like_f(obs)
         lnP = logsum(lnf,1)
-        z = lnf - lnP[:,np.newaxis]
+        z = np.exp(lnf - lnP[:,np.newaxis])
         return z,lnP.sum()
     
     def fit(self,obs,niter=1000,eps=1.0e-4,ifreq=10,init=True):
@@ -105,18 +105,27 @@ class EMGMM:
             dobs = obs - self._xbar[k]
             self._C[k] = np.dot((self.z[:,k] * dobs.T), dobs)
         
-    def _update_parameters(self):
+    def _update_parameters(self,min_cv=0.001):
         nmix = self._nstates
         self.pi = self._N / self._N.sum()
         self.m = np.array(self._xbar)
-        self.cv = self._C / self._N[:,np.newaxis,np.newaxis]
+        self.cv = np.identity(len(self._C[0])) * min_cv \
+            + self._C / self._N[:,np.newaxis,np.newaxis]
+
+    def decode(self,obs):
+        z,lnP = self.eval_hidden_states(obs)
+        codes = z.argmax(1)
+        params = self.showModel()
+    
+    def plot1d(self,obs,d1=0,clust_pos=None):
+        pass
         
     
 def test1(n=1000):
     X = testData(n)
-    model = EMGMM(5)
+    model = EMGMM(10)
     model.fit(X)
-    model.showModel()
+    model.showModel(True,True)
     
 if __name__ == "__main__":
     from sys import argv
