@@ -1,6 +1,7 @@
 import numpy as np
 from scipy.special import gammaln
 from scipy.linalg import  eigh, cholesky, solve, det
+from moments import E_lndetW_Wishart
 import pylab
 
 def logsum(A, axis=None):
@@ -32,21 +33,41 @@ def normalize(A, axis=None):
         Asum.shape = shape
     return A / Asum
     
-def log_like_Gauss(obs, m, cv):
+def _sym_quad_form(x,A):
+    """
+    calculate x.T * inv(A) * x
+    """
+    A_chol = cholesky(A)
+    A_sol = solve(A_chol, x.T, lower=True).T
+    q = np.sum(A_sol ** 2, axis=1)
+    return q
+    
+def log_like_Gauss(obs, mu, cv):
     """
     Log probability for full covariance matrices.
     """
     nobs, ndim = obs.shape
+    nmix = len(mu)
+    lnf = np.empty((nobs, nmix))
+    for k in xrange(nmix):
+        dln2pi = ndim * np.log(2.0 * np.pi)
+        lndetV = np.log(det(cv[k]))
+        q = _sym_quad_form((obs-mu[k]),cv[k])        
+        lnf[:, k] = -0.5 * (dln2pi + lndetV + q)
+    return lnf
+    
+def log_like_Gauss2(obs,nu,V,beta,m):
+    nobs, ndim = obs.shape
     nmix = len(m)
     lnf = np.empty((nobs, nmix))
     for k in xrange(nmix):
-        cv_chol = cholesky(cv[k], lower=True)
-        cv_sol = solve(cv_chol, (obs - m[k]).T, lower=True).T
-        lndetV = np.log(det(cv[k]))
-        lnf[:, k] = -0.5 * (ndim * np.log(2.0 * np.pi) + lndetV \
-            + np.sum(cv_sol ** 2, axis=1))
+        dln2pi = ndim * np.log(2.0 * np.pi)
+        lndetV = - E_lndetW_Wishart(nu[k],V[k])
+        cv = V[k] / nu[k]
+        q = _sym_quad_form((obs-m[k]),cv) + ndim / beta[k]              
+        lnf[:, k] = -0.5 * (dln2pi + lndetV + q) 
     return lnf
-
+    
 def cnormalize(X):
     """
     Z transformation
@@ -79,9 +100,9 @@ def ica(X):
     Wrapper function for Independent Component Analysis of scikits.learn.decomposition
     """
     from scikits.learn.decomposition import FastICA
-    ica = FastICA()
-    ica.fit(X.T)
-    Y = ica.transform(X.T).T
+    model = FastICA()
+    model.fit(X.T)
+    Y = model.transform(X.T).T
     return Y / Y.std(0)
 
 
