@@ -37,7 +37,7 @@ def _sym_quad_form(x,A):
     """
     calculate x.T * inv(A) * x
     """
-    A_chol = cholesky(A)
+    A_chol = cholesky(A,lower=True)
     A_sol = solve(A_chol, x.T, lower=True).T
     q = np.sum(A_sol ** 2, axis=1)
     return q
@@ -65,7 +65,8 @@ def log_like_Gauss2(obs,nu,V,beta,m):
         lndetV = - E_lndetW_Wishart(nu[k],V[k])
         cv = V[k] / nu[k]
         q = _sym_quad_form((obs-m[k]),cv) + ndim / beta[k]              
-        lnf[:, k] = -0.5 * (dln2pi + lndetV + q) 
+        lnf[:, k] = -0.5 * (dln2pi + lndetV + q)
+
     return lnf
     
 def cnormalize(X):

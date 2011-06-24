@@ -70,7 +70,7 @@ class EMGMM:
         F = 1.0e50
         
         for i in xrange(niter):
-            F_new = self._E_step(obs)
+            F_new = - self._E_step(obs)
             dF = F_new - F
             if abs(dF) < eps :
                 print "%8dth iter, Free Energy = %12.6e, dF = %12.6e" \
@@ -92,7 +92,7 @@ class EMGMM:
     
     def _E_step(self,obs):
         self.z, lnP = self.eval_hidden_states(obs)      
-        return -lnP
+        return lnP
         
     def _M_step(self,obs):
         self._calculate_sufficient_statistics(obs)
@@ -179,9 +179,9 @@ class EMGMM:
 
 def test1(n=1000):
     X = testData(n)
-    model = EMGMM(3)
+    model = EMGMM(10)
     model.fit(X)
-    model.plot2d(X)
+    model.showModel()
     
 if __name__ == "__main__":
     from sys import argv

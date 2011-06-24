@@ -69,8 +69,10 @@ class VBGMM(EMGMM):
         return KL
         
     def _E_step(self,obs):
-        F = EMGMM._E_step(self,obs) + self._KL_div()
-        return F
+        lnP = EMGMM._E_step(self,obs) 
+        KL = self._KL_div()
+        L = lnP - KL
+        return L
         
     def _update_parameters(self,min_cv=None):
         nmix = self._nstates
@@ -88,7 +90,7 @@ def test1(n=1000):
     X = testData(n)
     model = VBGMM(5)
     model.fit(X)
-    model.plot2d(X)
+    model.showModel()
     
 if __name__ == "__main__":
     from sys import argv

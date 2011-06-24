@@ -50,7 +50,7 @@ def sample_gaussian(m,cv,n=1):
     ndim = len(m)
     r = np.random.randn(n, ndim)
     if n == 1:
-        rand.shape = (n_dim,)
+        r.shape = (ndim,)
         
     cv_chol = cholesky(cv)
     r = np.dot(r,cv_chol.T) + m
