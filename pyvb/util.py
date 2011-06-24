@@ -1,4 +1,4 @@
-import numpy as np
+﻿import numpy as np
 from scipy.special import gammaln
 from scipy.linalg import  eigh, cholesky, solve, det
 from moments import E_lndetW_Wishart
@@ -32,7 +32,7 @@ def normalize(A, axis=None):
         shape[axis] = 1
         Asum.shape = shape
     return A / Asum
-    
+
 def _sym_quad_form(x,A):
     """
     calculate x.T * inv(A) * x
@@ -41,7 +41,7 @@ def _sym_quad_form(x,A):
     A_sol = solve(A_chol, x.T, lower=True).T
     q = np.sum(A_sol ** 2, axis=1)
     return q
-    
+
 def log_like_Gauss(obs, mu, cv):
     """
     Log probability for full covariance matrices.
@@ -52,10 +52,10 @@ def log_like_Gauss(obs, mu, cv):
     for k in xrange(nmix):
         dln2pi = ndim * np.log(2.0 * np.pi)
         lndetV = np.log(det(cv[k]))
-        q = _sym_quad_form((obs-mu[k]),cv[k])        
+        q = _sym_quad_form((obs-mu[k]),cv[k])
         lnf[:, k] = -0.5 * (dln2pi + lndetV + q)
     return lnf
-    
+
 def log_like_Gauss2(obs,nu,V,beta,m):
     nobs, ndim = obs.shape
     nmix = len(m)
@@ -64,11 +64,11 @@ def log_like_Gauss2(obs,nu,V,beta,m):
         dln2pi = ndim * np.log(2.0 * np.pi)
         lndetV = - E_lndetW_Wishart(nu[k],V[k])
         cv = V[k] / nu[k]
-        q = _sym_quad_form((obs-m[k]),cv) + ndim / beta[k]              
+        q = _sym_quad_form((obs-m[k]),cv) + ndim / beta[k]
         lnf[:, k] = -0.5 * (dln2pi + lndetV + q)
 
     return lnf
-    
+
 def cnormalize(X):
     """
     Z transformation
@@ -142,8 +142,8 @@ def _blob(x,y,area,colour):
 
 def hinton(W, maxWeight=None):
     """
-    Draws a Hinton diagram for visualizing a weight matrix. 
-    Temporarily disables matplotlib interactive mode if it is on, 
+    Draws a Hinton diagram for visualizing a weight matrix.
+    Temporarily disables matplotlib interactive mode if it is on,
     otherwise this takes forever.
     """
     reenable = False

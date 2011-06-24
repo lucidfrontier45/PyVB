@@ -1,4 +1,4 @@
-import numpy as np
+﻿import numpy as np
 from scipy.special import gammaln,digamma
 from scipy.linalg import det, solve
 
@@ -40,59 +40,78 @@ def KL_Dirichlet(alpha1,alpha2):
 def lnZ_Wishart(nu,V):
     if nu < len(V) + 1:
         raise ValueError, "dof parameter nu must larger than len(V)"
-    
+
     D = len(V)
     lnZ = 0.5 * nu * (D * np.log(2.0) - np.log(det(V))) \
         + gammaln(np.arange(nu+1-D,nu+1)*0.5).sum()
-    
+
     return lnZ
-    
+
 def E_lndetW_Wishart(nu,V):
     if nu < len(V) + 1:
         raise ValueError, "dof parameter nu must larger than len(V)"
-    
+
     D = len(V)
     E = D*np.log(2.0) - np.log(det(V)) + \
         digamma(np.arange(nu+1-D,nu+1)*0.5).sum()
-    
+
     return E
-    
+
 def KL_Wishart(nu1,V1,nu2,V2):
     if nu1 < len(V1) + 1:
         raise ValueError, "dof parameter nu1 must larger than len(V1)"
-        
+
     if nu2 < len(V2) + 1:
         raise ValueError, "dof parameter nu2 must larger than len(V2)"
-    
+
     if len(V1) != len(V2):
         raise ValueError, \
             "dimension of two matrix dont match, %d and %d"%(len(V1),len(V2))
-    
+
     D = len(V1)
     KL = 0.5 * ( (nu1 -nu2) * E_lndetW_Wishart(nu1,V1) \
-        - nu1 * (np.trace(solve(V1,V2)) - D)) \
+        + nu1 * (np.trace(solve(V1,V2)) - D)) \
         - lnZ_Wishart(nu1,V1) + lnZ_Wishart(nu2,V2)
-        
+
     if KL < 0.0 :
+        print nu1,nu2,V1,V2
         raise ValueError, "KL must be larger than 0"
-        
+
     return KL
-    
+
 def KL_GaussWishart(nu1,V1,beta1,m1,nu2,V2,beta2,m2):
     if len(m1) != len(m2):
         raise ValueError,  \
             "dimension of two mean dont match, %d and %d"%(len(m1),len(m2))
-    
+
     D = len(m1)
 
-    # first assign KL of Wishart    
-    KL = KL_Wishart(nu1,V1,nu2,V2)
-    
+    # first assign KL of Wishart
+    KL1 = KL_Wishart(nu1,V1,nu2,V2)
+
     # the rest terms
-    KL += 0.5 * (D * (np.log(beta1/beta2) + beta2/beta1 - 1.0) + \
-        beta2 * nu1 * np.dot((m1-m2),solve(V1,(m1-m2))))
-    
+    KL2 = 0.5 * (D * (np.log(beta1/float(beta2)) + beta2/float(beta1) - 1.0) \
+        + beta2 * nu1 * np.dot((m1-m2),solve(V1,(m1-m2))))
+
+    KL = KL1 + KL2
+
     if KL < 0.0 :
         raise ValueError, "KL must be larger than 0"
-        
+
     return KL
+
+if __name__ == "__main__":
+    alpha1 = np.array([0.3,0.7])
+    alpha2 = np.array([0.5,0.5])
+    nu1 = 10
+    nu2 = 15
+    m1 = np.array([1.0,2.0])
+    m2 = m1 * 2.0
+    V1 = np.identity(2)
+    V2 = np.identity(2) * 3.0
+    beta1 = 3
+    beta2 = 4
+    print E_lnpi_Dirichlet(alpha1)
+    print KL_Dirichlet(alpha1,alpha2)
+    print E_lndetW_Wishart(nu1,V1)
+    print KL_GaussWishart(nu1,V1,beta1,m1,nu2,V2,beta2,m2)
