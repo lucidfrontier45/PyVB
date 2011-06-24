@@ -2,12 +2,19 @@
 
 import numpy as np
 from scipy.cluster import vq
-from util import normalize, logsum, log_like_Gauss
+from util import normalize, logsum, log_like_Gauss, compexity_GMM
 from sampling import testData
 
 class EMGMM:
     """
     Gaussian Mixture Model with Expectation-Maximization (EM) Algorithm.
+    Attributes
+        _nstates [int] : number of hidden states
+        pi [ndarray, shape (_nstates)] : mixing coefficients
+        mu [ndarray, shape (_nstates, dim)] : mean vectors
+        cv [ndarray, shape (_nstates, dim, dim)] :covariance matrix
+    Methods
+        
     """ 
     def __init__(self,nmix=10):
         # maximum number of the hidden clusters
@@ -62,6 +69,26 @@ class EMGMM:
         lnP = logsum(lnf,1)
         z = np.exp(lnf - lnP[:,np.newaxis])
         return z,lnP.sum()
+
+    def score(self,obs,mode="ML"):
+        """
+        score the model
+        input
+            obs [ndarray, shape(nobs,ndim)] : observed data
+            mode [string] : one of 'ML', 'AIC' or 'BIC'
+        output
+            S [float] : score of the model
+        """
+        z,lnP = self.eval_hidden_states(obs)
+        nmix = self._nstates
+        nobs, ndim = obs.shape
+        if model in ("AIC", "aic"):
+            S = -lnP + complexity_GMM(nmix,ndim)
+        if model in ("BIC", "bic"):
+            S = -lnP + complexity_GMM(nmix,ndim) * np.log(nobs)
+        else
+            S = -lnP
+        return -lnP
     
     def fit(self,obs,niter=1000,eps=1.0e-4,ifreq=10,init=True,plot=False):
         if init:
@@ -177,12 +204,13 @@ class EMGMM:
         return MT
 
 
-def test1(n=1000):
-    X = testData(n)
-    model = EMGMM(10)
+def test1(nmix=3):
+    X = testData(1000)
+    model = EMGMM(nmix)
     model.fit(X)
     model.showModel()
     
 if __name__ == "__main__":
     from sys import argv
-    test1(int(argv[1]))
+    nmix = int(argv[1])
+    test1(nmix)

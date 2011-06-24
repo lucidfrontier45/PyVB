@@ -84,10 +84,11 @@ class VBGMM(EMGMM):
                 + (self._N[k] * self._beta0 / self._beta[k]) * np.outer(dx,dx)
 
 def test1(nmix=5):
-    X = testData(10000)
+    X = testData(5000)
     model = VBGMM(nmix)
     model.fit(X)
-    model.showModel()
+    #model.showModel()
+    model.plot2d(X)
 
 if __name__ == "__main__":
     from sys import argv
