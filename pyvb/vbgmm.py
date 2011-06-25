@@ -201,7 +201,7 @@ class VBGMM(EMGMM):
                 + (self._N[k] * self._beta0 / self._beta[k]) * np.outer(dx,dx)
 
 def test1(nmix=5):
-    X = testData(1000)
+    X = testData(50000)
     model = VBGMM(nmix)
     model.fit(X)
     #model.showModel()
