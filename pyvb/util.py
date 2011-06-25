@@ -44,7 +44,8 @@ def _sym_quad_form(x,A):
 
 def log_like_Gauss(obs, mu, cv):
     """
-    Log probability for full covariance matrices.
+    Log probability for Gaussian with full covariance matrices.
+    lnP = -0.5 * (ln2pi + lndet(cv) + (obs-mu)cv(obs-mu))
     """
     nobs, ndim = obs.shape
     nmix = len(mu)
@@ -57,6 +58,11 @@ def log_like_Gauss(obs, mu, cv):
     return lnf
 
 def log_like_Gauss2(obs,nu,V,beta,m):
+    """
+    Log probability for Gaussian with full covariance matrices.
+    Here mean vectors and covarience matrices are probability variable with
+    respect to Gauss-Wishart distribution.
+    """
     nobs, ndim = obs.shape
     nmix = len(m)
     lnf = np.empty((nobs, nmix))

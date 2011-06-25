@@ -1,4 +1,4 @@
-import numpy as np
+﻿import numpy as np
 from numpy.random import randn
 from scipy.linalg import inv, cholesky
 
@@ -46,21 +46,21 @@ def sample_gaussian(m,cv,n=1):
     obs : array, shape (ndim, n)
         Randomly generated sample
     """
-    
+
     ndim = len(m)
     r = np.random.randn(n, ndim)
     if n == 1:
         r.shape = (ndim,)
-        
+
     cv_chol = cholesky(cv)
     r = np.dot(r,cv_chol.T) + m
 
     return r
 
 def sample_niw(mu_0,lmbda_0,kappa_0,nu_0):
-    '''
+    """
     Returns a sample from the normal/inverse-wishart distribution, conjugate prior for (simultaneously) unknown mean and unknown covariance in a Gaussian likelihood model. Returns covariance.
-    '''
+    """
     # p. 87 in Gelman
 
     # first sample Lambda ~ IW(lmbda_0^-1,nu_0)
@@ -73,13 +73,13 @@ def sample_niw(mu_0,lmbda_0,kappa_0,nu_0):
 
 
 def sample_wishart(S, dof):
-    '''
+    """
     Returns a sample from the Wishart distn, conjugate prior for precision matrices.
     Higher dof means higher 'variance' (larger eigenvalues) in precision space, meaning lower 'variance' in covariance space
-    '''
+    """
     n = S.shape[0]
     chol = cholesky(S)
-    
+
     # use matlab's heuristic for choosing between the
     #   two different sampling schemes
     if (dof <= 81+n) and (dof == round(dof)):
@@ -89,6 +89,5 @@ def sample_wishart(S, dof):
         A = np.diag(np.sqrt(np.random.chisquare(dof - np.arange(0,n))))
         A[np.tri(n,k=-1,dtype=bool)] = np.random.normal(size=(n*(n-1)/2.))
         X = np.dot(chol,A)
-    
+
     return np.dot(X,X.T)
-    

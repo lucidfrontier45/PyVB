@@ -2,11 +2,14 @@
 from scipy.special import gammaln,digamma
 from scipy.linalg import det, solve
 
+# threshold for KL
+_small_negative_number = -1.0e-10
+
 def lnZ_Dirichlet(alpha):
     """
     log normalization constant of Dirichlet distribution
     input
-        alpha [ndarray, shape (nmix)] : parameter of Dirichlet dist
+      alpha [ndarray, shape (nmix)] : parameter of Dirichlet dist
     """
 
     Z = gammaln(alpha).sum() - gammaln(alpha.sum())
@@ -22,8 +25,8 @@ def KL_Dirichlet(alpha1,alpha2):
     """
     KL-div of Dirichlet distribution KL[q(alpha1)||p(alpha2)]
     input
-        alpha1 [ndarray, shape (nmix)] : parameter of 1st Dirichlet dist
-        alpha2 [ndarray, shape (nmix)] : parameter of 2nd Dirichlet dist
+      alpha1 [ndarray, shape (nmix)] : parameter of 1st Dirichlet dist
+      alpha2 [ndarray, shape (nmix)] : parameter of 2nd Dirichlet dist
     """
 
     if len(alpha1) != len(alpha2) :
@@ -32,12 +35,19 @@ def KL_Dirichlet(alpha1,alpha2):
     KL = - lnZ_Dirichlet(alpha1) + lnZ_Dirichlet(alpha2) \
         + np.dot((alpha1 - alpha2),(digamma(alpha1) - digamma(alpha1.sum())))
 
-    if KL < 0.0 :
+    if KL < _small_negative_number :
         raise ValueError, "KL must be larger than 0"
 
     return KL
 
 def lnZ_Wishart(nu,V):
+    """
+    log normalization constant of Wishart distribution
+    input
+      nu [float] : dof parameter of Wichart distribution
+      V [ndarray, shape (D x D)] : base matrix of Wishart distribution
+      note <CovMat> = V/nu
+    """
     if nu < len(V) + 1:
         raise ValueError, "dof parameter nu must larger than len(V)"
 
@@ -48,6 +58,12 @@ def lnZ_Wishart(nu,V):
     return lnZ
 
 def E_lndetW_Wishart(nu,V):
+    """
+    mean of log determinant of precision matrix over Wishart <lndet(W)>
+    input
+      nu [float] : dof parameter of Wichart distribution
+      V [ndarray, shape (D x D)] : base matrix of Wishart distribution
+    """
     if nu < len(V) + 1:
         raise ValueError, "dof parameter nu must larger than len(V)"
 
@@ -58,6 +74,9 @@ def E_lndetW_Wishart(nu,V):
     return E
 
 def KL_Wishart(nu1,V1,nu2,V2):
+    """
+    KL-div of Wishart distribution KL[q(nu1,V1)||p(nu2,V2)]
+    """
     if nu1 < len(V1) + 1:
         raise ValueError, "dof parameter nu1 must larger than len(V1)"
 
@@ -73,13 +92,16 @@ def KL_Wishart(nu1,V1,nu2,V2):
         + nu1 * (np.trace(solve(V1,V2)) - D)) \
         - lnZ_Wishart(nu1,V1) + lnZ_Wishart(nu2,V2)
 
-    if KL < 0.0 :
+    if KL < _small_negative_number :
         print nu1,nu2,V1,V2
         raise ValueError, "KL must be larger than 0"
 
     return KL
 
 def KL_GaussWishart(nu1,V1,beta1,m1,nu2,V2,beta2,m2):
+    """
+    KL-div of Gauss-Wishart distr KL[q(nu1,V1,beta1,m1)||p(nu2,V2,beta2,m2)
+    """
     if len(m1) != len(m2):
         raise ValueError,  \
             "dimension of two mean dont match, %d and %d"%(len(m1),len(m2))
@@ -95,7 +117,7 @@ def KL_GaussWishart(nu1,V1,beta1,m1,nu2,V2,beta2,m2):
 
     KL = KL1 + KL2
 
-    if KL < 0.0 :
+    if KL < _small_negative_number :
         raise ValueError, "KL must be larger than 0"
 
     return KL
