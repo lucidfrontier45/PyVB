@@ -111,7 +111,7 @@ class _BaseHMM():
         lnf = self._log_like_f(obs)
         lnalpha, lnbeta, lneta = self._allocate_temp(obs)
         lneta, lngamma, lnP = self._Estep(lnf,lnalpha,lnbeta,lneta,use_ext)
-        return lnP,np.exp(lngamma)
+        return np.exp(lngamma), lnP
 
     def _complexity(self):
         """
@@ -130,7 +130,7 @@ class _BaseHMM():
           S [float] : score of the model
         """
         nobs, ndim = obs.shape
-        lnP,z = self.eval_hidden_states(obs,use_ext="F")
+        z, lnP = self.eval_hidden_states(obs,use_ext="F")
         comp = self._complexity()
         if mode in ("AIC", "aic"):
             # use Akaike information criterion
@@ -147,7 +147,7 @@ class _BaseHMM():
         """
         Get the most probable cluster id
         """
-        posterior = self.eval(obs,use_ext)[1]
+        posterior = self.eval(obs,use_ext)[0]
         return posterior.argmax(1)
 
     def fit(self,obs,niter=1000,eps=1.0e-4,ifreq=10,init=True,use_ext="F"):
