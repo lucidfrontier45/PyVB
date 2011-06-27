@@ -2,7 +2,6 @@
 from scipy.special import gammaln
 from scipy.linalg import  eigh, cholesky, solve, det
 from moments import E_lndetW_Wishart
-import pylab
 
 def logsum(A, axis=None):
     """Computes the sum of A assuming A is in the log domain.
@@ -92,15 +91,13 @@ def correct_k(k,m):
     """
     return k * np.log(m) - m - 2.0 * gammaln(k+1)
 
-def complexity_GMM(k,d):
+def num_param_Gauss(d):
     """
-    count number of parameters for Gaussian Mixture Model in d-dimension
-    with k clusters.
+    count number of parameters for Gaussian d-dimension.
     input
-        k [int] : number of clusters
         d [int] : dimension of data
     """
-    return k * (1.0 * 0.5 * d * (d + 3.0))
+    return 0.5 * d * (d + 3.0)
 
 def ica(X):
     """
@@ -152,6 +149,7 @@ def hinton(W, maxWeight=None):
     Temporarily disables matplotlib interactive mode if it is on,
     otherwise this takes forever.
     """
+    import pylab
     reenable = False
     if pylab.isinteractive():
         pylab.ioff()

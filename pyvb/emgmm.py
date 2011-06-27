@@ -2,7 +2,7 @@
 
 import numpy as np
 from scipy.cluster import vq
-from util import normalize, logsum, log_like_Gauss, complexity_GMM
+from util import normalize, logsum, log_like_Gauss, num_param_Gauss
 from sampling import testData
 
 class EMGMM:
@@ -126,7 +126,7 @@ class EMGMM:
         z = np.exp(lnf - lnP[:,np.newaxis])
         return z,lnP.sum()
 
-    def score(self,obs,mode="ML"):
+    def score(self,obs,mode="BIC"):
         """
         score the model
         input
@@ -138,16 +138,17 @@ class EMGMM:
         z,lnP = self.eval_hidden_states(obs)
         nmix = self._nstates
         nobs, ndim = obs.shape
-        if model in ("AIC", "aic"):
+        k = num_param_Gauss(ndim)
+        if mode in ("AIC", "aic"):
             # use Akaike information criterion
-            S = -lnP + complexity_GMM(nmix,ndim)
-        if model in ("BIC", "bic"):
+            S = -lnP + (nmix + k * nmix)
+        if mode in ("BIC", "bic"):
             # use Bayesian information criterion
-            S = -lnP + complexity_GMM(nmix,ndim) * np.log(nobs)
+            S = -lnP + (nmix + k * nmix) * np.log(nobs)
         else:
             # use negative likelihood
             S = -lnP
-        return -lnP
+        return S
 
     def fit(self,obs,niter=1000,eps=1.0e-4,ifreq=10,init=True,plot=False):
         """
@@ -367,6 +368,7 @@ def test1(nmix=3):
     model = EMGMM(nmix)
     model.fit(X)
     model.showModel()
+    print model.score(X)
 
 if __name__ == "__main__":
     from sys import argv

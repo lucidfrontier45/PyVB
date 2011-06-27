@@ -103,7 +103,7 @@ class _BaseHMM():
                 lnbeta[t,:] = logsum(self.lnA + lnf[t+1,:] + lnbeta[t+1,:],1)
         return lnbeta,logsum(lnbeta[0,:] + lnf[0,:] + self.lnpi)
 
-    def eval(self,obs,use_ext="F"):
+    def eval_hidden_states(self,obs,use_ext="F"):
         """
         Performe one Estep.
         Then obtain variational free energy and posterior over hidden states
@@ -111,7 +111,37 @@ class _BaseHMM():
         lnf = self._log_like_f(obs)
         lnalpha, lnbeta, lneta = self._allocate_temp(obs)
         lneta, lngamma, lnP = self._Estep(lnf,lnalpha,lnbeta,lneta,use_ext)
-        return -lnP,np.exp(lngamma)
+        return lnP,np.exp(lngamma)
+
+    def _complexity(self):
+        """
+        Count the number of parameter of HMM
+        """
+        comp = self._nstates * (1.0 + self._nstates)
+        return comp
+
+    def score(self,obs,use_ext="F"):
+        """
+        score the model
+        input
+          obs [ndarray, shape(nobs,ndim)] : observed data
+          mode [string] : one of 'ML', 'AIC' or 'BIC'
+        output
+          S [float] : score of the model
+        """
+        nobs, ndim = obs.shape
+        lnP,z = self.eval_hidden_states(obs,use_ext="F")
+        comp = self._complexity()
+        if mode in ("AIC", "aic"):
+            # use Akaike information criterion
+            S = -lnP + comp
+        if mode in ("BIC", "bic"):
+            # use Bayesian information criterion
+            S = -lnP + comp * np.log(nobs)
+        else:
+            # use negative likelihood
+            S = -lnP
+        return -lnP + self._complexity(obs)
 
     def decode(self,obs,use_ext="F"):
         """
@@ -280,11 +310,18 @@ class _BaseHMM():
 class MultinomialHMM(_BaseHMM):
     def __init__(self,N,M):
         _BaseHMM.__init__(self,N)
-        self.m_states = M
+        self._mstates = M
         self.lnB = np.log(dirichlet([1.0]*M,N))
 
     def _log_like_f(self,obs):
         return self.lnB[:,obs].T
+
+    def _complexity(self):
+        """
+        Count the number of parameter of HMM
+        """
+        comp = _BaseHMM._complexity(self) + float(self._nstates) * self._mstates
+        return comp
 
     def simulate(self,T):
         pi_cdf = np.exp(self.lnpi).cumsum()
@@ -303,7 +340,7 @@ class MultinomialHMM(_BaseHMM):
 
     def _updatePosteriorParameters(self,obs,lneta,lngamma,multi=False):
         logsum = _BaseHMM._updatePosteriorParameters(self,obs,lneta,lngamma)
-        for j in xrange(self.m_states):
+        for j in xrange(self._mstates):
             self.lnB[:,j] = logsum(lngamma[obs==j,:],0) - lngamma_sum
 
 class GaussianHMM(_BaseHMM):
@@ -321,6 +358,14 @@ class GaussianHMM(_BaseHMM):
 
     def _log_like_f(self,obs):
         return log_like_Gauss(obs,self.mu,self.cv)
+
+    def _complexity(self):
+        """
+        Count the number of parameter of HMM
+        """
+        nmix, ndim = self.mu.shape
+        comp = _BaseHMM._complexity(self) + nmix * num_parm_Gauss(ndim)
+        return comp
 
     def simulate(self,T):
         N,D = self.mu.shape
