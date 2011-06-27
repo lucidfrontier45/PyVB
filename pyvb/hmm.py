@@ -3,7 +3,7 @@
 import numpy as np
 from numpy.random import random,dirichlet
 from scipy.cluster import vq
-from util import logsum, log_like_Gauss, complexity_GMM
+from util import logsum, log_like_Gauss, num_param_Gauss
 from sampling import sample_gaussian
 
 # import Fortran95 extension module
@@ -25,8 +25,8 @@ class _BaseHMM():
 
     def __init__(self,N):
         self._nstates = N # number of hidden states
-        self.lnpi = np.log(np.tile(1.0/N,N)) # log initial probability
-        self.lnA = np.log(dirichlet([1.0]*N,N)) # log transition probability
+        self._lnpi = np.log(np.tile(1.0/N,N)) # log initial probability
+        self._lnA = np.log(dirichlet([1.0]*N,N)) # log transition probability
 
     def _log_like_f(obs):
         """
@@ -38,7 +38,9 @@ class _BaseHMM():
         """
         Do some initializations
         """
-        pass
+        nmix = self._nstates
+        self.pi = np.empty(nmix)
+        self.A = np.empty((nmix,nmix))
 
     def _allocate_temp(self,obs):
         """
@@ -65,15 +67,15 @@ class _BaseHMM():
         lnalpha *= 0.0
         if use_ext and ext_imported:
             if use_ext in ("c","C"):
-                _hmmc._forward_C(T,self._nstates,self.lnpi,self.lnA,lnf,lnalpha)
+                _hmmc._forward_C(T,self._nstates,self._lnpi,self._lnA,lnf,lnalpha)
             elif use_ext in ("f","F"):
-                lnalpha = _hmmf.forward_f(self.lnpi,self.lnA,lnf)
+                lnalpha = _hmmf.forward_f(self._lnpi,self._lnA,lnf)
             else :
                 raise ValueError, "ext_use must be either 'C' or 'F'"
         else:
-            lnalpha[0,:] = self.lnpi + lnf[0,:]
+            lnalpha[0,:] = self._lnpi + lnf[0,:]
             for t in xrange(1,T):
-                lnalpha[t,:] = logsum(lnalpha[t-1,:] + self.lnA.T,1) \
+                lnalpha[t,:] = logsum(lnalpha[t-1,:] + self._lnA.T,1) \
                     + lnf[t,:]
         return lnalpha,logsum(lnalpha[-1,:])
 
@@ -92,16 +94,16 @@ class _BaseHMM():
         lnbeta *= 0.0
         if ext_imported:
             if use_ext in ("c","C"):
-                _hmmc._backward_C(T,self._nstates,self.lnpi,self.lnA,lnf,lnbeta)
+                _hmmc._backward_C(T,self._nstates,self._lnpi,self._lnA,lnf,lnbeta)
             elif use_ext in ("f","F"):
-                lnbeta = _hmmf.backward_f(self.lnpi,self.lnA,lnf)
+                lnbeta = _hmmf.backward_f(self._lnpi,self._lnA,lnf)
             else :
                 raise ValueError, "ext_use must be either 'C' or 'F'"
         else:
             lnbeta[T-1,:] = 0.0
             for t in xrange(T-2,-1,-1):
-                lnbeta[t,:] = logsum(self.lnA + lnf[t+1,:] + lnbeta[t+1,:],1)
-        return lnbeta,logsum(lnbeta[0,:] + lnf[0,:] + self.lnpi)
+                lnbeta[t,:] = logsum(self._lnA + lnf[t+1,:] + lnbeta[t+1,:],1)
+        return lnbeta,logsum(lnbeta[0,:] + lnf[0,:] + self._lnpi)
 
     def eval_hidden_states(self,obs,use_ext="F"):
         """
@@ -110,7 +112,7 @@ class _BaseHMM():
         """
         lnf = self._log_like_f(obs)
         lnalpha, lnbeta, lneta = self._allocate_temp(obs)
-        lneta, lngamma, lnP = self._Estep(lnf,lnalpha,lnbeta,lneta,use_ext)
+        lneta, lngamma, lnP = self._E_step(lnf,lnalpha,lnbeta,lneta,use_ext)
         return np.exp(lngamma), lnP
 
     def _complexity(self):
@@ -120,7 +122,7 @@ class _BaseHMM():
         comp = self._nstates * (1.0 + self._nstates)
         return comp
 
-    def score(self,obs,use_ext="F"):
+    def score(self,obs,mode,use_ext="F"):
         """
         score the model
         input
@@ -141,14 +143,28 @@ class _BaseHMM():
         else:
             # use negative likelihood
             S = -lnP
-        return -lnP + self._complexity(obs)
+        return S
 
     def decode(self,obs,use_ext="F"):
         """
         Get the most probable cluster id
         """
-        posterior = self.eval(obs,use_ext)[0]
-        return posterior.argmax(1)
+        z,lnP = self.eval_hidden_states(obs)
+        return z.argmax(1)
+        
+    def getRelaventCluster(self,eps=1.0e-2):
+        """
+        return parameters of relavent clusters
+        """
+        nmix = self._nstates
+        ids = []
+        sorted_ids = (-self.pi).argsort()
+        for k in sorted_ids:
+            if self.pi[k] > eps:
+                ids.append(k)
+        pi = self.pi[ids]
+        A = np.array([AA[ids] for AA in self.A[ids]])
+        return ids,pi,A
 
     def fit(self,obs,niter=1000,eps=1.0e-4,ifreq=10,init=True,use_ext="F"):
         """
@@ -168,7 +184,7 @@ class _BaseHMM():
             # E step
             lnf = self._log_like_f(obs)
             lneta, lngamma, lnP = \
-            self._Estep(lnf,lnalpha,lnbeta,lneta,use_ext)
+            self._E_step(lnf,lnalpha,lnbeta,lneta,use_ext)
             # check for convergence
             F = -lnP
             dF = F - old_F
@@ -183,8 +199,10 @@ class _BaseHMM():
                 print "%6dth iter, F = %15.8e  df = %15.8e warning"%(i,F,dF)
             old_F = F
             # M step
-            self._Mstep(obs,lneta,lngamma,use_ext)
-
+            self._M_step(obs,lneta,lngamma,use_ext)
+        
+        self.pi = np.exp(self._lnpi)
+        self.A = np.exp(self._lnA)
         return self
 
     def fit_multi(self,obss,niter=1000,eps=1.0e-4,ifreq=10,\
@@ -223,7 +241,7 @@ class _BaseHMM():
             lnf = self._log_like_f(obs_flatten)
             for nn in xrange(nobss):
                 Ti,Tf = pos_ids[nn]
-                e, g, p = self._Estep(lnf[Ti:Tf],lnalpha[:nobs[nn]],\
+                e, g, p = self._E_step(lnf[Ti:Tf],lnalpha[:nobs[nn]],\
                     lnbeta[:nobs[nn]],lneta_temp[:nobs[nn]-1],use_ext)
                 lneta[nn] = e[:]
                 lngamma[nn] = g[:]
@@ -240,11 +258,11 @@ class _BaseHMM():
             elif dF > 0.0:
                 print "%6dth iter, F = %15.8e  df = %15.8e warning"%(i,F,dF)
             old_F = F
-            self._Mstep(obs_flatten,lneta,lngamma,use_ext,multi=True)
+            self._M_step(obs_flatten,lneta,lngamma,use_ext,multi=True)
 
         return self
 
-    def _Estep(self,lnf,lnalpha,lnbeta,lneta,use_ext="F"):
+    def _E_step(self,lnf,lnalpha,lnbeta,lneta,use_ext="F"):
         T = len(lnf)
 
         # Forward-Backward algorithm
@@ -259,17 +277,17 @@ class _BaseHMM():
         # compute lneta for updating transition matrix
         if ext_imported and use_ext:
             if use_ext in ("c","C"):
-                _hmmc._compute_lnEta_C(T,self._nstates,lnalpha,self.lnA, \
+                _hmmc._compute_lnEta_C(T,self._nstates,lnalpha,self._lnA, \
                     lnbeta,lnf,lnP_f,lneta)
             elif use_ext in ("f","F"):
-                lneta = _hmmf.compute_lneta_f(lnalpha,self.lnA,lnbeta,lnf,lnP_f)
+                lneta = _hmmf.compute_lneta_f(lnalpha,self._lnA,lnbeta,lnf,lnP_f)
             else :
                 raise ValueError, "ext_use must be either 'C' or 'F'"
         else:
             for i in xrange(self._nstates):
                 for j in xrange(self._nstates):
                     for t in xrange(T-1):
-                        lneta[t,i,j] = lnalpha[t,i] + self.lnA[i,j,] + \
+                        lneta[t,i,j] = lnalpha[t,i] + self._lnA[i,j,] + \
                             lnf[t+1,j] + lnbeta[t+1,j]
             lneta -= lnP_f
 
@@ -278,31 +296,31 @@ class _BaseHMM():
 
         return lneta,lngamma,lnP_f
 
-    def _Mstep(self,obs,lneta,lngamma,use_ext="F",multi=False):
-        self._calcSufficientStatistic(obs,lneta,lngamma,multi)
-        self._updatePosteriorParameters(obs,lneta,lngamma,multi)
+    def _M_step(self,obs,lneta,lngamma,use_ext="F",multi=False):
+        self._calculate_sufficient_statistics(obs,lneta,lngamma,multi)
+        self._update_parameters(obs,lneta,lngamma,multi)
 
-    def _calcSufficientStatistic(self,obs,lneta,lngamma,multi=False):
+    def _calculate_sufficient_statistics(self,obs,lneta,lngamma,multi=False):
         pass
 
-    def _updatePosteriorParameters(self,obs,lneta,lngamma,multi=False):
+    def _update_parameters(self,obs,lneta,lngamma,multi=False):
         if multi :
             # for multiple trajectories
             lg = np.vstack(lngamma)
             le = np.vstack(lneta)
             lngamma_sum = logsum(lg,0)
-            #self.lnpi = lngamma_sum - logsum(lg)
-            self.lnpi = logsum(np.array([lg_temp[0] for lg_temp in lngamma]),0)
-            self.lnA = logsum(le,0) - logsum(np.vstack(\
+            #self._lnpi = lngamma_sum - logsum(lg)
+            self._lnpi = logsum(np.array([lg_temp[0] for lg_temp in lngamma]),0)
+            self._lnA = logsum(le,0) - logsum(np.vstack(\
               [lg_temp[:-1] for lg_temp in lngamma]),0)[:,np.newaxis]
 
         else:
             lngamma_sum = logsum(lngamma,0)
-            #self.lnpi = lngamma_sum - logsum(lngamma_sum)
+            #self._lnpi = lngamma_sum - logsum(lngamma_sum)
             # update initial probability
-            self.lnpi = lngamma[0]
+            self._lnpi = lngamma[0]
             # update transition matrix
-            self.lnA = logsum(lneta,0) \
+            self._lnA = logsum(lneta,0) \
               - logsum(lngamma[:-1],0)[:,np.newaxis]
 
         return lngamma_sum
@@ -311,10 +329,10 @@ class MultinomialHMM(_BaseHMM):
     def __init__(self,N,M):
         _BaseHMM.__init__(self,N)
         self._mstates = M
-        self.lnB = np.log(dirichlet([1.0]*M,N))
+        self._lnB = np.log(dirichlet([1.0]*M,N))
 
     def _log_like_f(self,obs):
-        return self.lnB[:,obs].T
+        return self._lnB[:,obs].T
 
     def _complexity(self):
         """
@@ -324,9 +342,9 @@ class MultinomialHMM(_BaseHMM):
         return comp
 
     def simulate(self,T):
-        pi_cdf = np.exp(self.lnpi).cumsum()
-        A_cdf = np.exp(self.lnA).cumsum(1)
-        B_cdf = np.exp(self.lnB).cumsum(1)
+        pi_cdf = np.exp(self._lnpi).cumsum()
+        A_cdf = np.exp(self._lnA).cumsum(1)
+        B_cdf = np.exp(self._lnB).cumsum(1)
         z = np.zeros(T,dtype=np.int)
         o = np.zeros(T,dtype=np.int)
         r = random((T,2))
@@ -338,10 +356,10 @@ class MultinomialHMM(_BaseHMM):
 
         return z,o
 
-    def _updatePosteriorParameters(self,obs,lneta,lngamma,multi=False):
-        logsum = _BaseHMM._updatePosteriorParameters(self,obs,lneta,lngamma)
+    def _update_parameters(self,obs,lneta,lngamma,multi=False):
+        lngamma_sum = _BaseHMM._update_parameters(self,obs,lneta,lngamma)
         for j in xrange(self._mstates):
-            self.lnB[:,j] = logsum(lngamma[obs==j,:],0) - lngamma_sum
+            self._lnB[:,j] = logsum(lngamma[obs==j,:],0) - lngamma_sum
 
 class GaussianHMM(_BaseHMM):
     def __init__(self,N):
@@ -364,13 +382,13 @@ class GaussianHMM(_BaseHMM):
         Count the number of parameter of HMM
         """
         nmix, ndim = self.mu.shape
-        comp = _BaseHMM._complexity(self) + nmix * num_parm_Gauss(ndim)
+        comp = _BaseHMM._complexity(self) + nmix * num_param_Gauss(ndim)
         return comp
 
     def simulate(self,T):
         N,D = self.mu.shape
-        pi_cdf = np.exp(self.lnpi).cumsum()
-        A_cdf = np.exp(self.lnA).cumsum(1)
+        pi_cdf = np.exp(self._lnpi).cumsum()
+        A_cdf = np.exp(self._lnA).cumsum(1)
         z = np.zeros(T,dtype=np.int)
         o = np.zeros((T,D))
         r = random(T)
@@ -381,8 +399,8 @@ class GaussianHMM(_BaseHMM):
             o[t] = sample_gaussian(self.mu[z[t]],self.cv[z[t]])
         return z,o
 
-    def _updatePosteriorParameters(self,obs,lneta,lngamma,multi=False):
-        logsum = _BaseHMM._updatePosteriorParameters(self,obs,lneta,lngamma,multi)
+    def _update_parameters(self,obs,lneta,lngamma,multi=False):
+        lngamma_sum = _BaseHMM._update_parameters(self,obs,lneta,lngamma,multi)
         if multi:
             posteriors = np.exp(np.vstack(lngamma))
         else:
@@ -417,8 +435,8 @@ if __name__ == "__main__":
             model.fit(o2,ifreq=ifreq)
       print model.mu
       print model.cv
-      print np.exp(model.lnpi)
-      A = np.exp(model.lnA)
+      print np.exp(model._lnpi)
+      A = np.exp(model._lnA)
       e_val,e_vec = eig(A.T)
       print e_val.real
       print e_vec

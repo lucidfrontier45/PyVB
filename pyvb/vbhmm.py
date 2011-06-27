@@ -1,11 +1,12 @@
 #!/usr/bin/python
 
 import numpy as np
-from numpy.random import random,randn,dirichlet
+from numpy.random import random, dirichlet
 from scipy.cluster import vq
 from scipy.special import digamma
 from hmm import _BaseHMM, test_model
-from core import *
+from util import log_like_Gauss2
+from moments import *
 
 class _BaseVBHMM(_BaseHMM):
     """
@@ -13,19 +14,19 @@ class _BaseVBHMM(_BaseHMM):
     All VB-HMM should be an inheritant of this class
     """
     def __init__(self,N,uPi0=0.5,uA0=0.5):
-          _BaseHMM.__init__(self,N)
+        _BaseHMM.__init__(self,N)
     
-    # hyperparameters for prior
-    # for initial prob
-    self._uPi = np.ones(N) * uPi0
-    # for transition prob
-    self._uA = np.ones((N,N)) * uA0
-    
-    # parameters for posterior
-    # for initial prob
-    self.WPi = np.array(self._uPi)
-    # for transition prob
-    self.WA = np.array(self._uA)
+        # hyperparameters for prior
+        # for initial prob
+        self._uPi = np.ones(N) * uPi0
+        # for transition prob
+        self._uA = np.ones((N,N)) * uA0
+        
+        # parameters for posterior
+        # for initial prob
+        self._WPi = np.array(self._uPi)
+        # for transition prob
+        self._WA = np.array(self._uA)
     
     def score(self,obs):
         """
@@ -40,41 +41,42 @@ class _BaseVBHMM(_BaseHMM):
         return F
     
     def fit(self,obs,niter=10000,eps=1.0e-4,ifreq=10,\
-      init=True,use_ext="F"):
-    """
-    Fit the HMM via VB-EM algorithm
-    """
-    if init:
-      self._initialize_HMM(obs)
-      old_F = 1.0e20
-    lnalpha, lnbeta, lneta = self._allocate_temp(obs)
-    
-    for i in xrange(niter):
-        # VB-E step
-        lnf = self.log_like_f(obs)
-        lneta,lngamma, lnP = self._Estep(lnf,lnalpha,lnbeta,lneta,use_ext)
-        
-        # check convergence
-        KL = self._KL_div()
-        F = -lnP + KL
-        dF = F - old_F
-        if(abs(dF) < eps):
-            print "%8dth iter, Free Energy = %12.6e, dF = %12.6e" %(i,F,dF)
-            print "%12.6e < %12.6e Converged" %(dF, eps)
-            break
-        if i % ifreq == 0 and dF < 0.0:
-            print "%6dth iter, F = %15.8e  df = %15.8e"%(i,F,dF)
-        elif dF >= 0.0:
-            print "%6dth iter, F = %15.8e  df = %15.8e warning"%(i,F,dF)
-
-        old_F = F
-        
-        # update parameters via VB-M step
-        self._Mstep(obs,lneta,lngamma,use_ext)
+        init=True,use_ext="F"):
+        """
+        Fit the HMM via VB-EM algorithm
+        """
+        if init:
+            self._initialize_HMM(obs)
+            old_F = 1.0e20
+            lnalpha, lnbeta, lneta = self._allocate_temp(obs)
             
-    return self
+        for i in xrange(niter):
+            # VB-E step
+            lnf = self._log_like_f(obs)
+            lneta,lngamma, lnP = self._E_step(lnf,lnalpha,lnbeta,lneta,use_ext)
 
-    def fit_multi(self,obss,niter=1000,eps=1.0e-4,ifreq=10,init=True,use_ext="F"):
+            # check convergence
+            KL = self._KL_div()
+            F = -lnP + KL
+            dF = F - old_F
+            if(abs(dF) < eps):
+                print "%8dth iter, Free Energy = %12.6e, dF = %12.6e" %(i,F,dF)
+                print "%12.6e < %12.6e Converged" %(dF, eps)
+                break
+            if i % ifreq == 0 and dF < 0.0:
+                print "%6dth iter, F = %15.8e  df = %15.8e"%(i,F,dF)
+            elif dF >= 0.0:
+                print "%6dth iter, F = %15.8e  df = %15.8e warning"%(i,F,dF)
+        
+            old_F = F
+
+            # update parameters via VB-M step
+            self._M_step(obs,lneta,lngamma,use_ext)
+
+        return self
+
+    def fit_multi(self,obss,niter=1000,eps=1.0e-4,ifreq=10,\
+            init=True,use_ext="F"):
         """
         Fit HMM via VB-EM algorithm with multiple trajectories
         """
@@ -82,7 +84,7 @@ class _BaseVBHMM(_BaseHMM):
         nobs = [len(obs) for obs in obss] # numbers of observations in all trajs
         i_max_obs = np.argmax(nobs)
         obs_flatten = np.vstack(obss) # flattened observations (sum(nobs)xdim)
-        nmix = self.n_states
+        nmix = self._nstates
     
         # get posistion id for each traj
         # i.e. obss[i] = obs[pos_ids[i][0]:pos_ids[i][1]]
@@ -106,10 +108,10 @@ class _BaseVBHMM(_BaseHMM):
     
         for i in xrange(niter):
             lnP = 0.0
-            lnf = self.log_like_f(obs_flatten)
+            lnf = self._log_like_f(obs_flatten)
             for nn in xrange(nobss):
                 Ti,Tf = pos_ids[nn]
-                e, g, p = self._Estep(lnf[Ti:Tf],lnalpha[:nobs[nn]],\
+                e, g, p = self._E_step(lnf[Ti:Tf],lnalpha[:nobs[nn]],\
                     lnbeta[:nobs[nn]],lneta_temp[:nobs[nn]-1],use_ext)
                 lneta[nn] = e[:]
                 lngamma[nn] = g[:]
@@ -130,7 +132,7 @@ class _BaseVBHMM(_BaseHMM):
                 print "%6dth iter, F = %15.8e  df = %15.8e warning"%(i,F,dF)
 
             old_F = F
-            self._Mstep(obs_flatten,np.vstack(lneta),lngamma,multi=True)
+            self._M_step(obs_flatten,np.vstack(lneta),lngamma,multi=True)
     
         return self
 
@@ -138,14 +140,14 @@ class _BaseVBHMM(_BaseHMM):
         """
         Compute KL divergence of initial and transition probabilities
         """
-        nmix = self.n_states
-        KLPi = KL_Dirichlet(self.WPi,self._uPi)
+        nmix = self._nstates
+        KLPi = KL_Dirichlet(self._WPi,self._uPi)
         KLA = 0
         for k in xrange(nmix):
-            KLA += KL_Dirichlet(self.WA[k],self._uA[k])
+            KLA += KL_Dirichlet(self._WA[k],self._uA[k])
         return KLPi + KLA
 
-    def _calcSufficientStatistic(self,obs,lneta,lngamma,multi=False):
+    def _calculate_sufficient_statistics(self,obs,lneta,lngamma,multi=False):
         if multi:
             self.z = np.exp(np.vstack(lngamma))
             self.z0 = np.exp([lg[0] for lg in lngamma]).sum(0)
@@ -153,59 +155,72 @@ class _BaseVBHMM(_BaseHMM):
             # z[n,k] = Q(Zn=k)
             self.z = np.exp(lngamma)
 
-    def _updatePosteriorParameters(self,obs,lneta,lngamma,multi=False):
+    def _update_parameters(self,obs,lneta,lngamma,multi=False):
         if multi :
-            self.WPi = self._uPi + self.z0
+            self._WPi = self._uPi + self.z0
         else:
             #self.WPi = self._uPi + self.z.sum(0)
             # update parameters of initial prob 
-            self.WPi = self._uPi + self.z[0]
+            self._WPi = self._uPi + self.z[0]
 
         # update parameters of transition prob 
-        self.WA = self._uA + np.exp(lneta).sum(0)
-        for k in xrange(self.n_states):
-            self.lnA[k,:] = digamma(self.WA[k,:]) - digamma(self.WA[k,:].sum())
+        self._WA = self._uA + np.exp(lneta).sum(0)
+        for k in xrange(self._nstates):
+            self._lnA[k,:] = digamma(self._WA[k,:]) \
+                    - digamma(self._WA[k,:].sum())
 
         # recalculate expetations
-        self.lnpi = digamma(self.WPi) - digamma(self.WPi.sum())
-        self._epi = self.WPi / self.WPi.sum()
-        self._eA = self.WA / self.WA.sum(1)[:,np.newaxis]
+        self._lnpi = digamma(self._WPi) - digamma(self._WPi.sum())
+        self._epi = self._WPi / self._WPi.sum()
+        self._eA = self._WA / self._WA.sum(1)[:,np.newaxis]
+        
+    def getExpectations(self):
+        """
+        Calculate expectations of parameters over posterior distribution
+        """
+        self.A = self._WA / self._WA.sum(1)[:,np.newaxis]
+        # <pi_k>_Q(pi_k)
+        ##self.pi = E_pi_Dirichlet(self._u)
+        ev = eig(model.A.T)
+        self.pi = abs(ev[1][:,ev[0].argmax()])
+        
+        return self.pi, self.A
 
     def getRelaventCluster(self,eps=1.0e-2):
         """
         return parameters of relavent clusters
         """
-        nmix = self.n_states
+        self.getExpectations()
+        nmix = self._nstates
         ids = []
-        ev = eig(model._eA.T)
-        pi = abs(ev[1][:,ev[0].argmax()])
-        sorted_ids = (-pi).argsort()
+        sorted_ids = (-self.pi).argsort()
         for k in sorted_ids:
-            if pi[k] > eps:
+            if self.pi[k] > eps:
                 ids.append(k)
-        pi = pi[ids]
-        A = np.array([AA[ids] for AA in self._eA[ids]])
+        pi = self.pi[ids]
+        A = np.array([AA[ids] for AA in self.A[ids]])
         return ids,pi,A
         
 class VBMultinomialHMM(_BaseVBHMM):
     def __init__(self,N,M,uPi0=0.5,uA0=0.5,uB0=0.5):
         _BaseVBHMM.__init__(self,N,uPi0,uA0)
-        self.m_states = M
+        self._mstates = M
         self._uB = np.ones((N,M)) * uB0
-        self.WB = np.array(self._uB)
-        self.lnB = np.log(dirichlet([1.0]*M,N))
+        self._WB = np.array(self._uB)
+        self._lnB = np.log(dirichlet([1.0]*M,N))
       
-    def log_like_f(self,obs):
-        return self.lnB[:,obs].T
+    def _log_like_f(self,obs):
+        return self._lnB[:,obs].T
 
     def simulate(self,T):
         pass
 
-    def _updatePosteriorParameters(self,obs,lneta,lngamma):
-        _BaseVBHMM._updatePosteriorParameters(self,obs,lneta,lngamma)
-        for j in xrange(self.m_states):
-            self.WB[:,j] = self._uB[:,j] + self.z[obs==j,:].sum(0)
-            self.lnB[:,j] = digamma(self.WB[:,j]) - digamma(self.WB[:,j].sum())
+    def _update_parameters(self,obs,lneta,lngamma):
+        _BaseVBHMM._update_parameters(self,obs,lneta,lngamma)
+        for j in xrange(self._mstates):
+            self._WB[:,j] = self._uB[:,j] + self.z[obs==j,:].sum(0)
+            self._lnB[:,j] = digamma(self._WB[:,j]) \
+                    - digamma(self._WB[:,j].sum())
 
 class VBGaussianHMM(_BaseVBHMM):
     """
@@ -214,15 +229,15 @@ class VBGaussianHMM(_BaseVBHMM):
     Parameter estimation is almost same as VBGMM.
     """
     def __init__(self,N,uPi0=0.5,uA0=0.5,m0=0.0,beta0=1,nu0=1,s0=0.01):
-    _BaseVBHMM.__init__(self,N,uPi0,uA0)
-    self._m0 = m0
-    self._beta0 = beta0
-    self._nu0 = nu0
-    self._s0 = s0
-    
+        _BaseVBHMM.__init__(self,N,uPi0,uA0)
+        self._m0 = m0
+        self._beta0 = beta0
+        self._nu0 = nu0
+        self._s0 = s0
+        
     def _initialize_HMM(self,obs,params="ms",scale=10.0):
         _BaseHMM._initialize_HMM(self,obs)
-        nmix = self.n_states
+        nmix = self._nstates
         T,D = obs.shape
         if self._nu0 < D:
             self._nu0 += D
@@ -248,7 +263,9 @@ class VBGaussianHMM(_BaseVBHMM):
         Calculate expectations of parameters over posterior distribution
         """
         # <pi_k>_Q(pi_k)
-        #self.pi = E_pi_Dirichlet(self._u)
+        ##self.pi = E_pi_Dirichlet(self._u)
+        ev = eig(model._eA.T)
+        self.pi = abs(ev[1][:,ev[0].argmax()])
 
         # <mu_k>_Q(mu_k,W_k)
         self.mu = np.array(self._m)
@@ -258,27 +275,28 @@ class VBGaussianHMM(_BaseVBHMM):
 
         return self.pi, self.mu, self.cv    
     
-    def log_like_f(self,obs):
+    def _log_like_f(self,obs):
         return log_like_Gauss2(obs,self._nu,self._V,self._beta,self._m)
     
-    def _calcSufficientStatistic(self,obs,lneta,lngamma,multi=False):
-        nmix = self.n_states
+    def _calculate_sufficient_statistics(self,obs,lneta,lngamma,multi=False):
+        nmix = self._nstates
         T,D = obs.shape
-        _BaseVBHMM._calcSufficientStatistic(self,obs,lneta,lngamma,multi)
+        _BaseVBHMM._calculate_sufficient_statistics(\
+                self,obs,lneta,lngamma,multi)
         self._N = self.z.sum(0)
-        self._xbar = np.dot(self.z.T,obs) / self.N[:,np.newaxis]
+        self._xbar = np.dot(self.z.T,obs) / self._N[:,np.newaxis]
         for k in xrange(nmix):
             dobs = obs - self._xbar[k]
             self._C[k] = np.dot((self.z[:,k]*dobs.T),dobs)
         
 
-    def _updatePosteriorParameters(self,obs,lneta,lngamma,multi=False):
-        nmix = self.n_states
+    def _update_parameters(self,obs,lneta,lngamma,multi=False):
+        nmix = self._nstates
         T,D = obs.shape
-        _BaseVBHMM._updatePosteriorParameters(self,obs,lneta,lngamma,multi)
-        self._beta = self._beta0 + self.N
-        self._nu = self._nu0 + self.N
-        self._V = self._V0 + self.C
+        _BaseVBHMM._update_parameters(self,obs,lneta,lngamma,multi)
+        self._beta = self._beta0 + self._N
+        self._nu = self._nu0 + self._N
+        self._V = self._V0 + self._C
         for k in xrange(nmix):
             self._m[k] = (self._beta0 * self._m0 + self._N[k] * self._xbar[k])\
                         / self._beta[k]
@@ -287,7 +305,7 @@ class VBGaussianHMM(_BaseVBHMM):
                 * np.outer(dx, dx)
                 
     def _KL_div(self):
-        nmix = self.n_states
+        nmix = self._nstates
         KL = _BaseVBHMM._KL_div(self)
         for k in xrange(nmix):
             KLg = KL_GaussWishart(self._nu[k],self._V[k],self._beta[k],\
@@ -297,8 +315,9 @@ class VBGaussianHMM(_BaseVBHMM):
 
     def getRelaventCluster(self,eps=1.0e-2):
         ids,pi,A = _BaseVBHMM.getRelaventCluster(self,eps)
-        m = self.m[ids]
-        cv = self._et[ids]
+        self.getExpectations()
+        m = self.mu[ids]
+        cv = self.cv[ids]
         return ids,pi,A,m,cv
 
     def getClustPos(self,obs,eps=1.0e-2):
@@ -309,12 +328,12 @@ class VBGaussianHMM(_BaseVBHMM):
             clust_pos.append(codes==k)
         return clust_pos
 
-    def compareCluster(self,i,j):
-        KL1 = KL_GaussWishart(self.nu[i],self.s[i],self.beta[i],self.m[i],\
-                              self.nu[j],self.s[j],self.beta[j],self.m[j])
-        KL2 = KL_GaussWishart(self.nu[j],self.s[j],self.beta[j],self.m[j],\
-                              self.nu[i],self.s[i],self.beta[i],self.m[i])
-        return 0.5 * (KL1 + KL2)
+    #def compareCluster(self,i,j):
+    #    KL1 = KL_GaussWishart(self.nu[i],self.s[i],self.beta[i],self._m[i],\
+    #                          self.nu[j],self.s[j],self.beta[j],self._m[j])
+    #    KL2 = KL_GaussWishart(self.nu[j],self.s[j],self.beta[j],self._m[j],\
+    #                          self.nu[i],self.s[i],self.beta[i],self.m[i])
+    #    return 0.5 * (KL1 + KL2)
 
     def mergeCluster(self,i,j,obs,copy=False,update=True):
         if copy:
@@ -324,8 +343,8 @@ class VBGaussianHMM(_BaseVBHMM):
         self.z[:,j] = 1.0e-15
         
         if update: 
-            self._Mstep(obs)
-            self._Estep(obs)
+            self._M_step(obs)
+            self._E_step(obs)
         if copy:
             return old_z
 
@@ -362,20 +381,20 @@ class VBGaussianHMM(_BaseVBHMM):
       
 if __name__ == "__main__":
     from sys import argv
-      from scipy.linalg import eig
-      ifreq = 10
-      imax = 10000
-      #Y = testData(5000)
-      os = []
-      zs = []
-      for i in range(int(argv[2])):
-      z,o = test_model.simulate(50)
-      os.append(o)
-      zs.append(z)
-      o2 = np.vstack(os)
-      model = VBGaussianHMM(int(argv[1]))
-      if "-mult" in argv :
-          model.fit_multi(os,imax,ifreq=ifreq)
-      else:
-          model.fit(o2,imax,ifreq=ifreq)
-      #model.plot2d(o2)
+    from scipy.linalg import eig
+    ifreq = 10
+    imax = 10000
+    #Y = testData(5000)
+    os = []
+    zs = []
+    for i in range(int(argv[2])):
+        z,o = test_model.simulate(50)
+        os.append(o)
+        zs.append(z)
+    o2 = np.vstack(os)
+    model = VBGaussianHMM(int(argv[1]))
+    if "-mult" in argv :
+        model.fit_multi(os,imax,ifreq=ifreq)
+    else:
+        model.fit(o2,imax,ifreq=ifreq)
+    model.plot2d(o2)
