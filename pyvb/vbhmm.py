@@ -5,7 +5,7 @@ from numpy.random import random, dirichlet
 from scipy.cluster import vq
 from scipy.special import digamma
 from hmm import _BaseHMM, test_model
-from util import log_like_Gauss2
+from util import log_like_Gauss2, normalize
 from moments import *
 
 class _BaseVBHMM(_BaseHMM):
@@ -156,23 +156,21 @@ class _BaseVBHMM(_BaseHMM):
             self.z = np.exp(lngamma)
 
     def _update_parameters(self,obs,lneta,lngamma,multi=False):
+
+        # update parameters of initial prob 
         if multi :
             self._WPi = self._uPi + self.z0
         else:
             #self.WPi = self._uPi + self.z.sum(0)
-            # update parameters of initial prob 
             self._WPi = self._uPi + self.z[0]
+        self._lnpi = E_lnpi_Dirichlet(self._WPi)
+        
 
         # update parameters of transition prob 
         self._WA = self._uA + np.exp(lneta).sum(0)
+        self._lnA = digamma(self._WA) - digamma(self._WA)
         for k in xrange(self._nstates):
-            self._lnA[k,:] = digamma(self._WA[k,:]) \
-                    - digamma(self._WA[k,:].sum())
-
-        # recalculate expetations
-        self._lnpi = digamma(self._WPi) - digamma(self._WPi.sum())
-        self._epi = self._WPi / self._WPi.sum()
-        self._eA = self._WA / self._WA.sum(1)[:,np.newaxis]
+            self._lnA[k,:] = E_lnpi_Dirichlet(self._WA[k,:])
         
     def getExpectations(self):
         """
@@ -181,24 +179,17 @@ class _BaseVBHMM(_BaseHMM):
         self.A = self._WA / self._WA.sum(1)[:,np.newaxis]
         # <pi_k>_Q(pi_k)
         ##self.pi = E_pi_Dirichlet(self._u)
-        ev = eig(model.A.T)
-        self.pi = abs(ev[1][:,ev[0].argmax()])
+        ev = eig(self.A.T)
+        self.pi = normalize(np.abs(ev[1][:,ev[0].argmax()]))
         
         return self.pi, self.A
 
-    def getRelaventCluster(self,eps=1.0e-2):
+    def showModel(self,show_pi=True,show_A=True,eps=1.0e-2):
         """
         return parameters of relavent clusters
         """
         self.getExpectations()
-        nmix = self._nstates
-        ids = []
-        sorted_ids = (-self.pi).argsort()
-        for k in sorted_ids:
-            if self.pi[k] > eps:
-                ids.append(k)
-        pi = self.pi[ids]
-        A = np.array([AA[ids] for AA in self.A[ids]])
+        ids, pi, A = _BaseHMM.showModel(self,show_pi,show_A,eps)
         return ids,pi,A
         
 class VBMultinomialHMM(_BaseVBHMM):
@@ -258,23 +249,6 @@ class VBGaussianHMM(_BaseVBHMM):
         # aux
         self._C = np.array(self._V)
     
-    def getExpectations(self):
-        """
-        Calculate expectations of parameters over posterior distribution
-        """
-        # <pi_k>_Q(pi_k)
-        ##self.pi = E_pi_Dirichlet(self._u)
-        ev = eig(model._eA.T)
-        self.pi = abs(ev[1][:,ev[0].argmax()])
-
-        # <mu_k>_Q(mu_k,W_k)
-        self.mu = np.array(self._m)
-
-        # inv(<W_k>_Q(W_k))
-        self.cv = self._V / self._nu[:,np.newaxis,np.newaxis]
-
-        return self.pi, self.mu, self.cv    
-    
     def _log_like_f(self,obs):
         return log_like_Gauss2(obs,self._nu,self._V,self._beta,self._m)
     
@@ -312,16 +286,38 @@ class VBGaussianHMM(_BaseVBHMM):
                 self._m[k],self._nu0,self._V0,self._beta0,self._m0)
             KL += KLg
         return KL
+        
+    def getExpectations(self):
+        """
+        Calculate expectations of parameters over posterior distribution
+        """
+        _BaseVBHMM.getExpectations(self)
+        # <mu_k>_Q(mu_k,W_k)
+        self.mu = np.array(self._m)
 
-    def getRelaventCluster(self,eps=1.0e-2):
-        ids,pi,A = _BaseVBHMM.getRelaventCluster(self,eps)
-        self.getExpectations()
-        m = self.mu[ids]
+        # inv(<W_k>_Q(W_k))
+        self.cv = self._V / self._nu[:,np.newaxis,np.newaxis]     
+        
+        return self.pi, self.A, self.mu, self.cv
+                
+        
+    def showModel(self,show_pi=True,show_A=True,show_mu=False,\
+        show_cv=False,eps=1.0e-2):
+        ids, pi, A = _BaseVBHMM.showModel(self,show_pi,show_A,eps)
+        mu = self.mu[ids]
         cv = self.cv[ids]
-        return ids,pi,A,m,cv
+        for k in range(len(ids)):
+            i = ids[k]
+            print "\n%dth component, pi = %8.3g" % (k,self.pi[i])
+            print "cluster id =", i
+            if show_mu:
+                print "mu =",self.mu[i]
+            if show_cv:
+                print "cv =",self.cv[i]      
+        return ids,pi,A,mu,cv
 
     def getClustPos(self,obs,eps=1.0e-2):
-        ids,pi,A,m,cv = self.getRelaventCluster(eps)
+        ids,pi,A,m,cv = self.showModel(eps)
         codes = self.decode(obs)
         clust_pos = []
         for k in ids:
@@ -397,4 +393,4 @@ if __name__ == "__main__":
         model.fit_multi(os,imax,ifreq=ifreq)
     else:
         model.fit(o2,imax,ifreq=ifreq)
-    model.plot2d(o2)
+    model.showModel(True,True,True,True)
