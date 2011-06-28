@@ -3,7 +3,7 @@
 import numpy as np
 from numpy.random import random,dirichlet
 from scipy.cluster import vq
-from util import logsum, log_like_Gauss, num_param_Gauss
+from util import logsum, log_like_Gauss, num_param_Gauss, normalize
 from sampling import sample_gaussian
 
 # import Fortran95 extension module
@@ -152,7 +152,7 @@ class _BaseHMM():
         z,lnP = self.eval_hidden_states(obs)
         return z.argmax(1)
         
-    def getRelaventCluster(self,eps=1.0e-2):
+    def showModel(self,show_pi=True,show_A=True,eps=1.0e-2):
         """
         return parameters of relavent clusters
         """
@@ -164,6 +164,10 @@ class _BaseHMM():
                 ids.append(k)
         pi = self.pi[ids]
         A = np.array([AA[ids] for AA in self.A[ids]])
+        if show_pi :
+            print "pi = ", pi
+        if show_A :
+            print "A = ", A
         return ids,pi,A
 
     def fit(self,obs,niter=1000,eps=1.0e-4,ifreq=10,init=True,use_ext="F"):
@@ -201,8 +205,10 @@ class _BaseHMM():
             # M step
             self._M_step(obs,lneta,lngamma,use_ext)
         
-        self.pi = np.exp(self._lnpi)
+        #self.pi = np.exp(self._lnpi)
         self.A = np.exp(self._lnA)
+        ev = eig(self.A.T)
+        self.pi = normalize(np.abs(ev[1][:,ev[0].argmax()]))
         return self
 
     def fit_multi(self,obss,niter=1000,eps=1.0e-4,ifreq=10,\
@@ -259,7 +265,10 @@ class _BaseHMM():
                 print "%6dth iter, F = %15.8e  df = %15.8e warning"%(i,F,dF)
             old_F = F
             self._M_step(obs_flatten,lneta,lngamma,use_ext,multi=True)
-
+        
+        self.A = np.exp(self._lnA)
+        ev = eig(self.A.T)
+        self.pi = normalize(np.abs(ev[1][:,ev[0].argmax()]))
         return self
 
     def _E_step(self,lnf,lnalpha,lnbeta,lneta,use_ext="F"):
@@ -384,6 +393,25 @@ class GaussianHMM(_BaseHMM):
         nmix, ndim = self.mu.shape
         comp = _BaseHMM._complexity(self) + nmix * num_param_Gauss(ndim)
         return comp
+        
+    def showModel(self,show_pi=True,show_A=True,show_mu=False,\
+        show_cv=False,eps=1.0e-2):
+        """
+        return parameters of relavent clusters
+        """
+        ids, pi, A = _BaseHMM.showModel(self,False,False,eps)
+        mu = self.mu[ids]
+        cv = self.cv[ids]
+        
+        for k in range(len(ids)):
+            i = ids[k]
+            print "\n%dth component, pi = %8.3g" % (k,self.pi[i])
+            print "cluster id =", i
+            if show_mu:
+                print "mu =",self.mu[i]
+            if show_cv:
+                print "cv =",self.cv[i]      
+        return ids,pi,A,mu,cv
 
     def simulate(self,T):
         N,D = self.mu.shape
@@ -433,10 +461,4 @@ if __name__ == "__main__":
             model.fit_multi(os,ifreq=ifreq)
       else:
             model.fit(o2,ifreq=ifreq)
-      print model.mu
-      print model.cv
-      print np.exp(model._lnpi)
-      A = np.exp(model._lnA)
-      e_val,e_vec = eig(A.T)
-      print e_val.real
-      print e_vec
+      model.showModel(True,True,True,True)

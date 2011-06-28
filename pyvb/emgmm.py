@@ -93,7 +93,7 @@ class EMGMM:
             if show_mu:
                 print "mu =",params[k][2]
             if show_cv:
-                print "tau =",params[k][3]
+                print "cv =",params[k][3]
 
         return relavent_clusters
 
