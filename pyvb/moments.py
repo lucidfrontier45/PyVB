@@ -122,7 +122,35 @@ def KL_GaussWishart(nu1,V1,beta1,m1,nu2,V2,beta2,m2):
 
     return KL
 
-if __name__ == "__main__":
+def E_pi_StickBrake(tau):
+    lntau = np.log(tau)
+    lntau_sum = np.log(tau.sum(1)).cumsum()
+    lnE = np.array(lntau[:,0])
+    lnE[1:] += lntau[:-1,1].cumsum()
+    lnE -= lntau_sum
+    E = np.exp(lnE)
+    return E
+
+def E_lnpi_StickBrake(tau):
+    lnzeta = digamma(tau) - digamma(tau.sum(1))[:,np.newaxis]
+    lnzeta[1:,1] = lnzeta[:-1,1].cumsum()
+    E = lnzeta.sum(1)
+    return E
+
+def KL_StickBrake(tau1,tau2):
+    if len(tau1) != len(tau2):
+        raise ValueError, "number of compenents didn't match"
+
+    nmix = len(tau1)
+
+    KL = np.sum([KL_Dirichlet(tau1[k],tau2[k]) for k in xrange(nmix)])
+
+    if KL < _small_negative_number :
+        raise ValueError, "KL must be larger than 0"
+    
+    return KL
+
+def test_moments():
     alpha1 = np.array([0.3,0.7])
     alpha2 = np.array([0.5,0.5])
     nu1 = 10
