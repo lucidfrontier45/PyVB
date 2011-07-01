@@ -255,7 +255,7 @@ class EMGMM:
         self.cv = np.identity(len(self._C[0])) * min_cv \
             + self._C / self._N[:,np.newaxis,np.newaxis]
 
-    def decode(self,obs):
+    def decode(self,obs,eps=0.01):
         """
         Return most probable cluster ids.
         Clusters are sorted along the mixing coefficients
@@ -265,14 +265,14 @@ class EMGMM:
         # take argmax
         codes = z.argmax(1)
         # get sorted ids
-        params = self.showModel()
+        params = self.showModel(min_pi=eps)
         # assign each observation to corresponding cluster
         clust_pos = []
         for p in params:
             clust_pos.append(codes==p[1])
         return clust_pos
 
-    def plot1d(self,obs,d1=0,clust_pos=None):
+    def plot1d(self,obs,d1=0,eps=0.01,clust_pos=None):
         """
         plot data of each cluster along one axis
         input
@@ -286,7 +286,7 @@ class EMGMM:
         l = np.arange(len(obs))
         # decode observed data
         if clust_pos == None:
-            clust_pos = self.decode(obs)
+            clust_pos = self.decode(obs,eps)
         # import pyplot
         try :
             import matplotlib.pyplot as plt
@@ -300,7 +300,7 @@ class EMGMM:
         plt.legend(loc=0)
         plt.show()
 
-    def plot2d(self,obs,d1=0,d2=1,clust_pos=None):
+    def plot2d(self,obs,d1=0,d2=1,eps=0.01,clust_pos=None):
         """
         plot data of each cluster along two axes
         input
@@ -311,7 +311,7 @@ class EMGMM:
         """
         symbs = ".hd^x+"
         if clust_pos == None:
-            clust_pos = self.decode(obs)
+            clust_pos = self.decode(obs,eps)
         try :
             import matplotlib.pyplot as plt
         except ImportError :
@@ -323,7 +323,7 @@ class EMGMM:
         plt.legend(loc=0)
         plt.show()
 
-    def makeTransMat(self,obs,norm=True,min_degree=10):
+    def makeTransMat(self,obs,norm=True,min_degree=1,eps=0.01):
         """
         Make transition probability matrix MT
           where MT[i,j] = N(x_{t+1}=j|x_t=i)
@@ -346,13 +346,14 @@ class EMGMM:
         # main loop
         for t in xrange(1,len(z)-1):
             MT += np.outer(z[t-1],z[t])
-            for i in xrange(len(MT)):
-                for j in xrange(len(MT)):
-                    if MT[i,j] < min_degree:
-                        MT[i,j] = 0.0
+
+        for i in xrange(len(MT)):
+            for j in xrange(len(MT)):
+                if MT[i,j] < min_degree:
+                    MT[i,j] = 0.0
 
         # extract relavent cluster
-        params = self.showModel()
+        params = self.showModel(min_pi=eps)
         cl = [p[1] for p in params]
         MT = np.array([mt[cl] for mt in MT[cl]])
 

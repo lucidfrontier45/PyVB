@@ -138,6 +138,7 @@ def _blob(x,y,area,colour):
     Draws a square-shaped blob with the given area (< 1) at
     the given coordinates.
     """
+    import pylab
     hs = np.sqrt(area) / 2
     xcorners = np.array([x - hs, x + hs, x + hs, x - hs])
     ycorners = np.array([y - hs, y - hs, y + hs, y + hs])

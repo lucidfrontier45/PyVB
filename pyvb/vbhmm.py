@@ -4,6 +4,7 @@ import numpy as np
 from numpy.random import random, dirichlet
 from scipy.cluster import vq
 from scipy.special import digamma
+from scipy.linalg import eig
 from hmm import _BaseHMM, test_model
 from util import log_like_Gauss2, normalize
 from moments import *
@@ -317,32 +318,12 @@ class VBGaussianHMM(_BaseVBHMM):
         return ids,pi,A,mu,cv
 
     def getClustPos(self,obs,eps=1.0e-2):
-        ids,pi,A,m,cv = self.showModel(eps)
+        ids,pi,A,m,cv = self.showModel(eps=eps)
         codes = self.decode(obs)
         clust_pos = []
         for k in ids:
             clust_pos.append(codes==k)
         return clust_pos
-
-    #def compareCluster(self,i,j):
-    #    KL1 = KL_GaussWishart(self.nu[i],self.s[i],self.beta[i],self._m[i],\
-    #                          self.nu[j],self.s[j],self.beta[j],self._m[j])
-    #    KL2 = KL_GaussWishart(self.nu[j],self.s[j],self.beta[j],self._m[j],\
-    #                          self.nu[i],self.s[i],self.beta[i],self.m[i])
-    #    return 0.5 * (KL1 + KL2)
-
-    def mergeCluster(self,i,j,obs,copy=False,update=True):
-        if copy:
-          old_z = np.array(self.z)
-    
-        self.z[:,i] += self.z[:,j]
-        self.z[:,j] = 1.0e-15
-        
-        if update: 
-            self._M_step(obs)
-            self._E_step(obs)
-        if copy:
-            return old_z
 
     def plot1d(self,obs,d1=0,eps=0.01,clust_pos=None):
         symbs = ".hd^x+"
@@ -377,7 +358,6 @@ class VBGaussianHMM(_BaseVBHMM):
       
 if __name__ == "__main__":
     from sys import argv
-    from scipy.linalg import eig
     ifreq = 10
     imax = 10000
     #Y = testData(5000)

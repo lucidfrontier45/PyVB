@@ -3,6 +3,7 @@
 import numpy as np
 from numpy.random import random,dirichlet
 from scipy.cluster import vq
+from scipy.linalg import eig
 from util import logsum, log_like_Gauss, num_param_Gauss, normalize
 from sampling import sample_gaussian
 
@@ -447,7 +448,6 @@ test_model.lnA = np.log([[0.9,0.05,0.05],[0.1,0.7,0.2],[0.1,0.4,0.5]])
 
 if __name__ == "__main__":
       from sys import argv
-      from scipy.linalg import eig
       ifreq = 10
       model = GaussianHMM(int(argv[1]))
       os = []
