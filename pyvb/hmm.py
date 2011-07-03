@@ -7,14 +7,31 @@ from scipy.linalg import eig
 from util import logsum, log_like_Gauss, num_param_Gauss, normalize
 from sampling import sample_gaussian
 
+# import C extension module
+try:
+    import _hmmc
+    extC_imported = True
+except ImportError:
+    print "C extension module was not imported"
+    extC_imported = False
+
 # import Fortran95 extension module
 try:
     import _hmmf
-    #import _hmmc
-    ext_imported = True
+    extF_imported = True
 except ImportError:
-    print "extension module was not imported"
-    ext_imported = False
+    print "Fortran extension module was not imported"
+    extF_imported = False
+
+if extF_imported :
+    default_ext = "F"
+elif extC_imported :
+    default_ext = "C"
+else :
+    default_ext = None
+    print "No extension module was not imported"
+    print "Forward-Backward step will be significantly slow"
+
 
 class _BaseHMM():
     """
@@ -53,7 +70,7 @@ class _BaseHMM():
         lneta = np.zeros((T-1,self._nstates,self._nstates))
         return lnalpha, lnbeta, lneta
 
-    def _forward(self,lnf,lnalpha,use_ext="F"):
+    def _forward(self,lnf,lnalpha,use_ext=default_ext):
         """
         Use forward algorith to calculate forward variables and loglikelihood
         input
@@ -66,21 +83,18 @@ class _BaseHMM():
         """
         T = len(lnf)
         lnalpha *= 0.0
-        if use_ext and ext_imported:
-            if use_ext in ("c","C"):
-                _hmmc._forward_C(T,self._nstates,self._lnpi,self._lnA,lnf,lnalpha)
-            elif use_ext in ("f","F"):
-                lnalpha = _hmmf.forward_f(self._lnpi,self._lnA,lnf)
-            else :
-                raise ValueError, "ext_use must be either 'C' or 'F'"
-        else:
+        if use_ext in ("c","C") and extC_imported :
+            _hmmc._forward_C(T,self._nstates,self._lnpi,self._lnA,lnf,lnalpha)
+        elif use_ext in ("f","F") and extF_imported :
+            lnalpha = _hmmf.forward_f(self._lnpi,self._lnA,lnf)
+        else :
             lnalpha[0,:] = self._lnpi + lnf[0,:]
             for t in xrange(1,T):
                 lnalpha[t,:] = logsum(lnalpha[t-1,:] + self._lnA.T,1) \
                     + lnf[t,:]
         return lnalpha,logsum(lnalpha[-1,:])
 
-    def _backward(self,lnf,lnbeta,use_ext="F"):
+    def _backward(self,lnf,lnbeta,use_ext=default_ext):
         """
         Use backward algorith to calculate backward variables and loglikelihood
         input
@@ -93,20 +107,17 @@ class _BaseHMM():
         """
         T = len(lnf)
         lnbeta *= 0.0
-        if ext_imported:
-            if use_ext in ("c","C"):
-                _hmmc._backward_C(T,self._nstates,self._lnpi,self._lnA,lnf,lnbeta)
-            elif use_ext in ("f","F"):
-                lnbeta = _hmmf.backward_f(self._lnpi,self._lnA,lnf)
-            else :
-                raise ValueError, "ext_use must be either 'C' or 'F'"
-        else:
+        if use_ext in ("c","C") and extC_imported :
+            _hmmc._backward_C(T,self._nstates,self._lnpi,self._lnA,lnf,lnbeta)
+        elif use_ext in ("f","F") and extF_imported :
+            lnbeta = _hmmf.backward_f(self._lnpi,self._lnA,lnf)
+        else :
             lnbeta[T-1,:] = 0.0
             for t in xrange(T-2,-1,-1):
                 lnbeta[t,:] = logsum(self._lnA + lnf[t+1,:] + lnbeta[t+1,:],1)
         return lnbeta,logsum(lnbeta[0,:] + lnf[0,:] + self._lnpi)
 
-    def eval_hidden_states(self,obs,use_ext="F"):
+    def eval_hidden_states(self,obs,use_ext=default_ext):
         """
         Performe one Estep.
         Then obtain variational free energy and posterior over hidden states
@@ -123,7 +134,7 @@ class _BaseHMM():
         comp = self._nstates * (1.0 + self._nstates)
         return comp
 
-    def score(self,obs,mode,use_ext="F"):
+    def score(self,obs,mode,use_ext=default_ext):
         """
         score the model
         input
@@ -133,7 +144,7 @@ class _BaseHMM():
           S [float] : score of the model
         """
         nobs, ndim = obs.shape
-        z, lnP = self.eval_hidden_states(obs,use_ext="F")
+        z, lnP = self.eval_hidden_states(obs,use_ext)
         comp = self._complexity()
         if mode in ("AIC", "aic"):
             # use Akaike information criterion
@@ -146,18 +157,17 @@ class _BaseHMM():
             S = -lnP
         return S
 
-    def decode(self,obs,use_ext="F"):
+    def decode(self,obs,use_ext=default_ext):
         """
         Get the most probable cluster id
         """
-        z,lnP = self.eval_hidden_states(obs)
+        z,lnP = self.eval_hidden_states(obs,use_ext)
         return z.argmax(1)
         
     def showModel(self,show_pi=True,show_A=True,eps=1.0e-2):
         """
         return parameters of relavent clusters
         """
-        nmix = self._nstates
         ids = []
         sorted_ids = (-self.pi).argsort()
         for k in sorted_ids:
@@ -171,7 +181,8 @@ class _BaseHMM():
             print "A = ", A
         return ids,pi,A
 
-    def fit(self,obs,niter=1000,eps=1.0e-4,ifreq=10,init=True,use_ext="F"):
+    def fit(self,obs,niter=1000,eps=1.0e-4,ifreq=10,init=True,\
+        use_ext=default_ext):
         """
         Fit the model parameters iteratively via EM algorithm
         """
@@ -213,7 +224,7 @@ class _BaseHMM():
         return self
 
     def fit_multi(self,obss,niter=1000,eps=1.0e-4,ifreq=10,\
-        init=True,use_ext="F"):
+            init=True,use_ext=default_ext):
         """
         Performe EM step for multiple iid time-series
         """
@@ -272,7 +283,7 @@ class _BaseHMM():
         self.pi = normalize(np.abs(ev[1][:,ev[0].argmax()]))
         return self
 
-    def _E_step(self,lnf,lnalpha,lnbeta,lneta,use_ext="F"):
+    def _E_step(self,lnf,lnalpha,lnbeta,lneta,use_ext=default_ext):
         T = len(lnf)
 
         # Forward-Backward algorithm
@@ -285,14 +296,11 @@ class _BaseHMM():
             print "warning forward and backward are not equivalent"
 
         # compute lneta for updating transition matrix
-        if ext_imported and use_ext:
-            if use_ext in ("c","C"):
-                _hmmc._compute_lnEta_C(T,self._nstates,lnalpha,self._lnA, \
-                    lnbeta,lnf,lnP_f,lneta)
-            elif use_ext in ("f","F"):
-                lneta = _hmmf.compute_lneta_f(lnalpha,self._lnA,lnbeta,lnf,lnP_f)
-            else :
-                raise ValueError, "ext_use must be either 'C' or 'F'"
+        if use_ext in ("c","C") and extC_imported :
+            _hmmc._compute_lnEta_C(T,self._nstates,lnalpha,self._lnA, \
+            lnbeta,lnf,lnP_f,lneta)
+        elif use_ext in ("f","F") and extF_imported :
+            lneta = _hmmf.compute_lneta_f(lnalpha,self._lnA,lnbeta,lnf,lnP_f)
         else:
             for i in xrange(self._nstates):
                 for j in xrange(self._nstates):
@@ -306,7 +314,7 @@ class _BaseHMM():
 
         return lneta,lngamma,lnP_f
 
-    def _M_step(self,obs,lneta,lngamma,use_ext="F",multi=False):
+    def _M_step(self,obs,lneta,lngamma,multi=False):
         self._calculate_sufficient_statistics(obs,lneta,lngamma,multi)
         self._update_parameters(obs,lneta,lngamma,multi)
 

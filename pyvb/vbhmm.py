@@ -1,11 +1,11 @@
 #!/usr/bin/python
 
 import numpy as np
-from numpy.random import random, dirichlet
+from numpy.random import dirichlet
 from scipy.cluster import vq
 from scipy.special import digamma
 from scipy.linalg import eig
-from hmm import _BaseHMM, test_model
+from hmm import _BaseHMM, test_model, default_ext
 from util import log_like_Gauss2, normalize
 from moments import *
 
@@ -42,7 +42,7 @@ class _BaseVBHMM(_BaseHMM):
         return F
     
     def fit(self,obs,niter=10000,eps=1.0e-4,ifreq=10,\
-        init=True,use_ext="F"):
+            init=True,use_ext=default_ext):
         """
         Fit the HMM via VB-EM algorithm
         """
@@ -77,7 +77,7 @@ class _BaseVBHMM(_BaseHMM):
         return self
 
     def fit_multi(self,obss,niter=1000,eps=1.0e-4,ifreq=10,\
-            init=True,use_ext="F"):
+            init=True,use_ext=default_ext):
         """
         Fit HMM via VB-EM algorithm with multiple trajectories
         """

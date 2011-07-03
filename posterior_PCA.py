@@ -1,6 +1,5 @@
 from sys import argv
-import numpy as np
-from pynumpdb import readPDBlist, writePDBFile,convCrd
+from pynumpdb import readPDBlist, writePDBFile
 from pynumpdb.anm import _moveCrd
 from core import posteriorPCA
 import pickle
@@ -17,7 +16,7 @@ refPDB = pdblist[z.argmax()]
 crd,misc,rmsds = readPDBlist(pdblist,refPDB)
 
 eig_val,eig_vec, pcrds  = posteriorPCA(crd,z)
-trj = _moveCrd(refPDB,eigval[0],eig_vec[:,0],maxd=eig_val[0])
+trj = _moveCrd(refPDB,eig_val[0],eig_vec[:,0],maxd=eig_val[0])
 for i in range(len(trj)):
     log_name = "PDB.%03d" % i
     writePDBFile(log_name,trj[i],misc)
