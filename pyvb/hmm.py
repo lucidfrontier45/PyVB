@@ -215,7 +215,7 @@ class _BaseHMM():
                 print "%6dth iter, F = %15.8e  df = %15.8e warning"%(i,F,dF)
             old_F = F
             # M step
-            self._M_step(obs,lneta,lngamma,use_ext)
+            self._M_step(obs,lneta,lngamma)
         
         #self.pi = np.exp(self._lnpi)
         self.A = np.exp(self._lnA)
@@ -276,7 +276,7 @@ class _BaseHMM():
             elif dF > 0.0:
                 print "%6dth iter, F = %15.8e  df = %15.8e warning"%(i,F,dF)
             old_F = F
-            self._M_step(obs_flatten,lneta,lngamma,use_ext,multi=True)
+            self._M_step(obs_flatten,lneta,lngamma,multi=True)
         
         self.A = np.exp(self._lnA)
         ev = eig(self.A.T)
