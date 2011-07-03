@@ -1,7 +1,7 @@
 #!/usr/bin/python
 
 import numpy as np
-from numpy.random import random, dirichlet
+from numpy.random import dirichlet
 from scipy.cluster import vq
 from scipy.special import digamma
 from scipy.linalg import eig

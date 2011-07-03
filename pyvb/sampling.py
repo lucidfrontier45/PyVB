@@ -17,7 +17,7 @@ def mixture_data(pi,m,cv,n=1000):
     pi2 = pi / np.sum(pi)
     x = []
     for k in xrange(nmix):
-        nk = int(pi[k] * n)
+        nk = int(pi2[k] * n)
         x.append(sample_gaussian(m[k],cv[k],nk))
     return np.concatenate(x)
 
@@ -48,7 +48,7 @@ def sample_gaussian(m,cv,n=1):
     """
 
     ndim = len(m)
-    r = np.random.randn(n, ndim)
+    r = randn(n, ndim)
     if n == 1:
         r.shape = (ndim,)
 

@@ -7,9 +7,11 @@ ctypedef np.float64_t dtype_t
 @cython.boundscheck(False)
 def _evaluateHiddenState_C( np.ndarray[dtype_t, ndim = 2] z,\
     np.ndarray[dtype_t, ndim = 2] obs,\
+    np.ndarray[dtype_t, ndim = 1] nu, \
     int nobs,int nmix, np.ndarray[dtype_t, ndim = 2] m,\
-    np.ndarray[dtype_t, ndim = 3] eS):
+    np.ndarray[dtype_t, ndim = 3] S):
   cdef int i,j,n,k,dim
+  cdef double temp
   cdef np.ndarray[dtype_t, ndim = 2] dobs
   dim = len(obs[0])
   dobs = np.zeros(nobs*dim).reshape(nobs,dim)
@@ -18,9 +20,12 @@ def _evaluateHiddenState_C( np.ndarray[dtype_t, ndim = 2] z,\
     for n in xrange(nobs):
       for i in xrange(dim):
         dobs[n,i] = obs[n,i] - m[k,i]
+      temp = 0.0
       for i in xrange(dim):
         for j in xrange(dim):
-          z[n,k] -= 0.5 * dobs[n,i] * eS[k,i,j] * dobs[n,j]
+          temp -=  dobs[n,i] * S[k,i,j] * dobs[n,j]
+      temp = temp * 0.5 * nu[k]
+      z[n,k] += temp
 
 @cython.boundscheck(False)
 def _lnPD_C( np.ndarray[dtype_t, ndim = 2] z,\

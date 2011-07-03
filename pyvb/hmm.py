@@ -7,14 +7,31 @@ from scipy.linalg import eig
 from util import logsum, log_like_Gauss, num_param_Gauss, normalize
 from sampling import sample_gaussian
 
+# import C extension module
+try:
+    import _hmmc
+    extC_imported = True
+except ImportError:
+    print "C extension module was not imported"
+    extC_imported = False
+
 # import Fortran95 extension module
 try:
     import _hmmf
-    #import _hmmc
-    ext_imported = True
+    extF_imported = True
 except ImportError:
-    print "extension module was not imported"
-    ext_imported = False
+    print "Fortran extension module was not imported"
+    extF_imported = False
+
+if extF_imported :
+    default_ext = "F"
+elif extC_imported :
+    default_ext = "C"
+else :
+    default_ext = None
+    print "No extension module was not imported"
+    print "Forward-Backward step will be significantly slow"
+
 
 class _BaseHMM():
     """
@@ -66,14 +83,11 @@ class _BaseHMM():
         """
         T = len(lnf)
         lnalpha *= 0.0
-        if use_ext and ext_imported:
-            if use_ext in ("c","C"):
-                _hmmc._forward_C(T,self._nstates,self._lnpi,self._lnA,lnf,lnalpha)
-            elif use_ext in ("f","F"):
-                lnalpha = _hmmf.forward_f(self._lnpi,self._lnA,lnf)
-            else :
-                raise ValueError, "ext_use must be either 'C' or 'F'"
-        else:
+        if use_ext in ("c","C") and extC_imported :
+            _hmmc._forward_C(T,self._nstates,self._lnpi,self._lnA,lnf,lnalpha)
+        elif use_ext in ("f","F") and extF_imported :
+            lnalpha = _hmmf.forward_f(self._lnpi,self._lnA,lnf)
+        else :
             lnalpha[0,:] = self._lnpi + lnf[0,:]
             for t in xrange(1,T):
                 lnalpha[t,:] = logsum(lnalpha[t-1,:] + self._lnA.T,1) \
@@ -93,14 +107,11 @@ class _BaseHMM():
         """
         T = len(lnf)
         lnbeta *= 0.0
-        if ext_imported:
-            if use_ext in ("c","C"):
-                _hmmc._backward_C(T,self._nstates,self._lnpi,self._lnA,lnf,lnbeta)
-            elif use_ext in ("f","F"):
-                lnbeta = _hmmf.backward_f(self._lnpi,self._lnA,lnf)
-            else :
-                raise ValueError, "ext_use must be either 'C' or 'F'"
-        else:
+        if use_ext in ("c","C") and extC_imported :
+            _hmmc._backward_C(T,self._nstates,self._lnpi,self._lnA,lnf,lnbeta)
+        elif use_ext in ("f","F") and extF_imported :
+            lnbeta = _hmmf.backward_f(self._lnpi,self._lnA,lnf)
+        else :
             lnbeta[T-1,:] = 0.0
             for t in xrange(T-2,-1,-1):
                 lnbeta[t,:] = logsum(self._lnA + lnf[t+1,:] + lnbeta[t+1,:],1)
@@ -157,7 +168,6 @@ class _BaseHMM():
         """
         return parameters of relavent clusters
         """
-        nmix = self._nstates
         ids = []
         sorted_ids = (-self.pi).argsort()
         for k in sorted_ids:
@@ -285,14 +295,11 @@ class _BaseHMM():
             print "warning forward and backward are not equivalent"
 
         # compute lneta for updating transition matrix
-        if ext_imported and use_ext:
-            if use_ext in ("c","C"):
-                _hmmc._compute_lnEta_C(T,self._nstates,lnalpha,self._lnA, \
-                    lnbeta,lnf,lnP_f,lneta)
-            elif use_ext in ("f","F"):
-                lneta = _hmmf.compute_lneta_f(lnalpha,self._lnA,lnbeta,lnf,lnP_f)
-            else :
-                raise ValueError, "ext_use must be either 'C' or 'F'"
+        if use_ext in ("c","C") and extC_imported :
+            _hmmc._compute_lnEta_C(T,self._nstates,lnalpha,self._lnA, \
+            lnbeta,lnf,lnP_f,lneta)
+        elif use_ext in ("f","F") and extF_imported :
+            lneta = _hmmf.compute_lneta_f(lnalpha,self._lnA,lnbeta,lnf,lnP_f)
         else:
             for i in xrange(self._nstates):
                 for j in xrange(self._nstates):

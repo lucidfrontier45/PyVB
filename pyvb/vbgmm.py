@@ -2,7 +2,7 @@
 
 import numpy as np
 from scipy.cluster import vq
-from util import logsum, log_like_Gauss2
+from util import log_like_Gauss2
 from sampling import testData
 from emgmm import EMGMM
 from moments import *
