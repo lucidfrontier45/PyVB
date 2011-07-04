@@ -29,7 +29,7 @@ class _BaseVBHMM(_BaseHMM):
         # for transition prob
         self._WA = np.array(self._uA)
     
-    def score(self,obs):
+    def score(self,obs,use_ext=default_ext,multi=False):
         """
         score the model
         input
@@ -37,7 +37,7 @@ class _BaseVBHMM(_BaseHMM):
         output
           F [float] : variational free energy of the model
         """
-        z,lnP = self.eval_hidden_states(obs)
+        z,lnP = self.eval_hidden_states(obs,use_ext,multi)
         F = -lnP + self._KL_div()
         return F
     
@@ -317,19 +317,25 @@ class VBGaussianHMM(_BaseVBHMM):
                 print "cv =",self.cv[i]      
         return ids,pi,A,mu,cv
 
-    def getClustPos(self,obs,eps=1.0e-2):
+    def getClustPos(self,obs,use_ext=default_ext,multi=False,eps=1.0e-2):
         ids,pi,A,m,cv = self.showModel(eps=eps)
-        codes = self.decode(obs)
+        codes = self.decode(obs,use_ext,multi)
         clust_pos = []
         for k in ids:
             clust_pos.append(codes==k)
         return clust_pos
 
-    def plot1d(self,obs,d1=0,eps=0.01,clust_pos=None):
+    def plot1d(self,obs,d1=0,eps=0.01,use_ext=default_ext,\
+            multi=False,clust_pos=None):
         symbs = ".hd^x+"
-        l = np.arange(len(obs))
+        if multi :
+            obs2 = np.vstack(obs)
+        else :
+            obs2 = obs
+            
+        l = np.arange(len(obs2))
         if clust_pos == None:
-            clust_pos = self.getClustPos(obs,eps)
+            clust_pos = self.getClustPos(obs,use_ext,multi,eps)
         try :
             import matplotlib.pyplot as plt
         except ImportError :
@@ -337,14 +343,20 @@ class VBGaussianHMM(_BaseVBHMM):
             return
         for k,pos in enumerate(clust_pos):
             symb = symbs[k / 6]
-            plt.plot(l[pos],obs[pos,d1],symb,label="%3dth cluster"%k)
+            plt.plot(l[pos],obs2[pos,d1],symb,label="%3dth cluster"%k)
         plt.legend(loc=0)
         plt.show()
 
-    def plot2d(self,obs,d1=0,d2=1,eps=0.01,clust_pos=None):
+    def plot2d(self,obs,d1=0,d2=1,eps=0.01,use_ext=default_ext,\
+            multi=False,clust_pos=None):
         symbs = ".hd^x+"
+        if multi :
+            obs2 = np.vstack(obs)
+        else :
+            obs2 = obs
+            
         if clust_pos == None:
-            clust_pos = self.getClustPos(obs,eps)
+            clust_pos = self.getClustPos(obs,use_ext,multi,eps)
         try :
             import matplotlib.pyplot as plt
         except ImportError :
@@ -352,7 +364,7 @@ class VBGaussianHMM(_BaseVBHMM):
             return
         for k,pos in enumerate(clust_pos):
             symb = symbs[k / 6]
-            plt.plot(obs[pos,d1],obs[pos,d2],symb,label="%3dth cluster"%k)
+            plt.plot(obs2[pos,d1],obs2[pos,d2],symb,label="%3dth cluster"%k)
         plt.legend(loc=0)
         plt.show()
       

@@ -46,7 +46,7 @@ class _BaseHMM():
         self._lnpi = np.log(np.tile(1.0/N,N)) # log initial probability
         self._lnA = np.log(dirichlet([1.0]*N,N)) # log transition probability
 
-    def _log_like_f(obs):
+    def _log_like_f(self,obs):
         """
         Calculate log-likelihood of emissions
         """
@@ -117,15 +117,27 @@ class _BaseHMM():
                 lnbeta[t,:] = logsum(self._lnA + lnf[t+1,:] + lnbeta[t+1,:],1)
         return lnbeta,logsum(lnbeta[0,:] + lnf[0,:] + self._lnpi)
 
-    def eval_hidden_states(self,obs,use_ext=default_ext):
+    def eval_hidden_states(self,obs,use_ext=default_ext,multi=False):
         """
         Performe one Estep.
         Then obtain variational free energy and posterior over hidden states
         """
-        lnf = self._log_like_f(obs)
-        lnalpha, lnbeta, lneta = self._allocate_temp(obs)
-        lneta, lngamma, lnP = self._E_step(lnf,lnalpha,lnbeta,lneta,use_ext)
-        return np.exp(lngamma), lnP
+        if multi :
+            z = []
+            lnP = []
+            for o in obs:
+                zz, ln = self.eval_hidden_states(o,use_ext,multi=False)
+                z.append(zz)
+                lnP.append(ln)
+            z = np.vstack(z)
+            lnP = np.sum(lnP)
+        else :
+            lnf = self._log_like_f(obs)
+            lnalpha, lnbeta, lneta = self._allocate_temp(obs)               
+            lneta, lngamma, lnP = \
+              self._E_step(lnf,lnalpha,lnbeta,lneta,use_ext)
+            z = np.exp(lngamma)
+        return z, lnP
 
     def _complexity(self):
         """
@@ -134,7 +146,7 @@ class _BaseHMM():
         comp = self._nstates * (1.0 + self._nstates)
         return comp
 
-    def score(self,obs,mode,use_ext=default_ext):
+    def score(self,obs,mode,use_ext=default_ext,multi=False):
         """
         score the model
         input
@@ -144,7 +156,7 @@ class _BaseHMM():
           S [float] : score of the model
         """
         nobs, ndim = obs.shape
-        z, lnP = self.eval_hidden_states(obs,use_ext)
+        z, lnP = self.eval_hidden_states(obs,use_ext,multi)
         comp = self._complexity()
         if mode in ("AIC", "aic"):
             # use Akaike information criterion
@@ -157,11 +169,11 @@ class _BaseHMM():
             S = -lnP
         return S
 
-    def decode(self,obs,use_ext=default_ext):
+    def decode(self,obs,use_ext=default_ext,multi=False):
         """
         Get the most probable cluster id
         """
-        z,lnP = self.eval_hidden_states(obs,use_ext)
+        z,lnP = self.eval_hidden_states(obs,use_ext,multi)
         return z.argmax(1)
         
     def showModel(self,show_pi=True,show_A=True,eps=1.0e-2):
@@ -189,8 +201,8 @@ class _BaseHMM():
 
         # performe initialization if needed
         if init:
-              self._initialize_HMM(obs)
-              old_F = 1.0e20
+            self._initialize_HMM(obs)
+            old_F = 1.0e20
 
         # allocate temporary for Forward-Backward
         lnalpha, lnbeta, lneta = self._allocate_temp(obs)
@@ -455,18 +467,18 @@ test_model.cv = np.tile(np.identity(2),(3,1,1))
 test_model.lnA = np.log([[0.9,0.05,0.05],[0.1,0.7,0.2],[0.1,0.4,0.5]])
 
 if __name__ == "__main__":
-      from sys import argv
-      ifreq = 10
-      model = GaussianHMM(int(argv[1]))
-      os = []
-      zs = []
-      for i in range(int(argv[2])):
-            z,o = test_model.simulate(50)
-            os.append(o)
-            zs.append(z)
-      o2 = np.vstack(os)
-      if "-mult" in argv :
-            model.fit_multi(os,ifreq=ifreq)
-      else:
-            model.fit(o2,ifreq=ifreq)
-      model.showModel(True,True,True,True)
+    from sys import argv
+    ifreq = 10
+    model = GaussianHMM(int(argv[1]))
+    os = []
+    zs = []
+    for i in range(int(argv[2])):
+        z,o = test_model.simulate(50)
+        os.append(o)
+        zs.append(z)
+    o2 = np.vstack(os)
+    if "-mult" in argv :
+        model.fit_multi(os,ifreq=ifreq)
+    else:
+        model.fit(o2,ifreq=ifreq)
+    model.showModel(True,True,True,True)
