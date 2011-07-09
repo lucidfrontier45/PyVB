@@ -1,6 +1,7 @@
 ﻿import numpy as np
 from scipy.special import gammaln
-from scipy.linalg import  eigh, cholesky, solve, det
+from scipy.linalg import  eigh, cholesky, solve, det, inv
+from scipy.spatial.distance import cdist
 from moments import E_lndetW_Wishart
 
 def logsum(A, axis=None):
@@ -32,14 +33,22 @@ def normalize(A, axis=None):
         Asum.shape = shape
     return A / Asum
 
-def _sym_quad_form(x,A):
+#def _sym_quad_form_old(x,mu,A):
+#    """
+#    calculate x.T * inv(A) * x
+#    """
+#    A_chol = cholesky(A,lower=True)
+#    A_sol = solve(A_chol, (x-mu).T, lower=True).T
+#    q = np.sum(A_sol ** 2, axis=1)
+#    return q
+
+def _sym_quad_form(x,mu,A):
     """
     calculate x.T * inv(A) * x
     """
-    A_chol = cholesky(A,lower=True)
-    A_sol = solve(A_chol, x.T, lower=True).T
-    q = np.sum(A_sol ** 2, axis=1)
+    q = (cdist(x,mu[np.newaxis],"mahalanobis",VI=inv(A))**2).reshape(-1)
     return q
+
 
 def log_like_Gauss(obs, mu, cv):
     """
@@ -52,7 +61,7 @@ def log_like_Gauss(obs, mu, cv):
     for k in xrange(nmix):
         dln2pi = ndim * np.log(2.0 * np.pi)
         lndetV = np.log(det(cv[k]))
-        q = _sym_quad_form((obs-mu[k]),cv[k])
+        q = _sym_quad_form(obs,mu[k],cv[k])
         lnf[:, k] = -0.5 * (dln2pi + lndetV + q)
     return lnf
 
@@ -69,7 +78,7 @@ def log_like_Gauss2(obs,nu,V,beta,m):
         dln2pi = ndim * np.log(2.0 * np.pi)
         lndetV = - E_lndetW_Wishart(nu[k],V[k])
         cv = V[k] / nu[k]
-        q = _sym_quad_form((obs-m[k]),cv) + ndim / beta[k]
+        q = _sym_quad_form(obs,m[k],cv) + ndim / beta[k]
         lnf[:, k] = -0.5 * (dln2pi + lndetV + q)
 
     return lnf
