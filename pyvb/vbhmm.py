@@ -72,7 +72,7 @@ class _BaseVBHMM(_BaseHMM):
             old_F = F
 
             # update parameters via VB-M step
-            self._M_step(obs,lneta,lngamma,use_ext)
+            self._M_step(obs,lneta,lngamma)
 
         return self
 
