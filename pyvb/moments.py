@@ -149,19 +149,3 @@ def KL_StickBrake(tau1,tau2):
         raise ValueError, "KL must be larger than 0"
     
     return KL
-
-def test_moments():
-    alpha1 = np.array([0.3,0.7])
-    alpha2 = np.array([0.5,0.5])
-    nu1 = 10
-    nu2 = 15
-    m1 = np.array([1.0,2.0])
-    m2 = m1 * 2.0
-    V1 = np.identity(2)
-    V2 = np.identity(2) * 3.0
-    beta1 = 3
-    beta2 = 4
-    print E_lnpi_Dirichlet(alpha1)
-    print KL_Dirichlet(alpha1,alpha2)
-    print E_lndetW_Wishart(nu1,V1)
-    print KL_GaussWishart(nu1,V1,beta1,m1,nu2,V2,beta2,m2)

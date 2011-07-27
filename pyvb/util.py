@@ -2,7 +2,7 @@
 from scipy.special import gammaln
 from scipy.linalg import  eigh, cholesky, solve, det, inv
 from scipy.spatial.distance import cdist
-from moments import E_lndetW_Wishart
+from .moments import E_lndetW_Wishart
 
 def logsum(A, axis=None):
     """Computes the sum of A assuming A is in the log domain.

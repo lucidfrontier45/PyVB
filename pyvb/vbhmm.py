@@ -1,13 +1,11 @@
-#!/usr/bin/python
-
 import numpy as np
 from numpy.random import dirichlet
 from scipy.cluster import vq
 from scipy.special import digamma
 from scipy.linalg import eig
-from hmm import _BaseHMM, test_model, default_ext
-from util import log_like_Gauss2, normalize
-from moments import *
+from .hmm import _BaseHMM, test_model, default_ext
+from .util import log_like_Gauss2, normalize
+from .moments import *
 
 class _BaseVBHMM(_BaseHMM):
     """
@@ -367,22 +365,3 @@ class VBGaussianHMM(_BaseVBHMM):
             plt.plot(obs2[pos,d1],obs2[pos,d2],symb,label="%3dth cluster"%k)
         plt.legend(loc=0)
         plt.show()
-      
-if __name__ == "__main__":
-    from sys import argv
-    ifreq = 10
-    imax = 10000
-    #Y = testData(5000)
-    os = []
-    zs = []
-    for i in range(int(argv[2])):
-        z,o = test_model.simulate(50)
-        os.append(o)
-        zs.append(z)
-    o2 = np.vstack(os)
-    model = VBGaussianHMM(int(argv[1]))
-    if "-mult" in argv :
-        model.fit_multi(os,imax,ifreq=ifreq)
-    else:
-        model.fit(o2,imax,ifreq=ifreq)
-    model.showModel(True,True,True,True)

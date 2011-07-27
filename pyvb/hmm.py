@@ -1,15 +1,13 @@
-﻿#!/usr/bin/python
-
-import numpy as np
+﻿import numpy as np
 from numpy.random import random,dirichlet
 from scipy.cluster import vq
 from scipy.linalg import eig
-from util import logsum, log_like_Gauss, num_param_Gauss, normalize
-from sampling import sample_gaussian
+from .util import logsum, log_like_Gauss, num_param_Gauss, normalize
+from .sampling import sample_gaussian
 
 # import C extension module
 try:
-    import _hmmc
+    from . import _hmmc
     extC_imported = True
 except ImportError:
     print "C extension module was not imported"
@@ -17,7 +15,7 @@ except ImportError:
 
 # import Fortran95 extension module
 try:
-    import _hmmf
+    from . import _hmmf
     extF_imported = True
 except ImportError:
     print "Fortran extension module was not imported"
@@ -466,19 +464,3 @@ test_model.mu = np.array([[0.0,0.0],[1.0,3.0],[-3.0,0.0]])
 test_model.cv = np.tile(np.identity(2),(3,1,1))
 test_model.lnA = np.log([[0.9,0.05,0.05],[0.1,0.7,0.2],[0.1,0.4,0.5]])
 
-if __name__ == "__main__":
-    from sys import argv
-    ifreq = 10
-    model = GaussianHMM(int(argv[1]))
-    os = []
-    zs = []
-    for i in range(int(argv[2])):
-        z,o = test_model.simulate(50)
-        os.append(o)
-        zs.append(z)
-    o2 = np.vstack(os)
-    if "-mult" in argv :
-        model.fit_multi(os,ifreq=ifreq)
-    else:
-        model.fit(o2,ifreq=ifreq)
-    model.showModel(True,True,True,True)

@@ -1,9 +1,7 @@
-﻿#!/usr/bin/python
-
-import numpy as np
+﻿import numpy as np
 from scipy.cluster import vq
-from util import normalize, logsum, log_like_Gauss, num_param_Gauss
-from sampling import testData
+from .util import normalize, logsum, log_like_Gauss, num_param_Gauss
+from .sampling import testData
 
 class EMGMM:
     """
@@ -362,16 +360,3 @@ class EMGMM:
             MT = normalize(MT,1)
 
         return MT
-
-
-def test1(nmix=3):
-    X = testData(100)
-    model = EMGMM(nmix)
-    model.fit(X)
-    model.showModel()
-    print model.score(X)
-
-if __name__ == "__main__":
-    from sys import argv
-    nmix = int(argv[1])
-    test1(nmix)

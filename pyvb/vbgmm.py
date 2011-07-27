@@ -1,11 +1,9 @@
-﻿#!/usr/bin/python
-
-import numpy as np
+﻿import numpy as np
 from scipy.cluster import vq
-from util import log_like_Gauss2
-from sampling import testData
-from emgmm import EMGMM
-from moments import *
+from .util import log_like_Gauss2
+from .sampling import testData
+from .emgmm import EMGMM
+from .moments import *
 
 class VBGMM(EMGMM):
     """
@@ -199,15 +197,3 @@ class VBGMM(EMGMM):
             dx = self._xbar[k] - self._m0
             self._V[k] = self._V0 + self._C[k] \
                 + (self._N[k] * self._beta0 / self._beta[k]) * np.outer(dx,dx)
-
-def test1(nmix=5):
-    X = testData(10000)
-    model = VBGMM(nmix)
-    model.fit(X)
-    #model.showModel()
-    model.plot2d(X)
-
-if __name__ == "__main__":
-    from sys import argv
-    nmix = int(argv[1])
-    test1(nmix)

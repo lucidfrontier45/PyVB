@@ -1,11 +1,9 @@
-﻿#!/usr/bin/python
-
-import numpy as np
+﻿import numpy as np
 from scipy.cluster import vq
-from util import log_like_Gauss2
-from sampling import testData
-from vbgmm import VBGMM
-from moments import *
+from .util import log_like_Gauss2
+from .sampling import testData
+from .vbgmm import VBGMM
+from .moments import *
 
 class DPGMM(VBGMM):
     def __init__(self,nmix=10,alpha=0.5,m0=0.0,beta0=1,nu0=1,V0=10.0):
@@ -108,18 +106,3 @@ class DPGMM(VBGMM):
             dx = self._xbar[k] - self._m0
             self._V[k] = self._V0 + self._C[k] \
                 + (self._N[k] * self._beta0 / self._beta[k]) * np.outer(dx,dx)
-                
-def test1(nmix=5):
-    X = testData(10000)
-    model = DPGMM(nmix)
-    model.fit(X)
-#    print model._tau
-#    model.getExpectations()
-#    print model.pi
-    model.showModel()
-    #model.plot2d(X)
-
-if __name__ == "__main__":
-    from sys import argv
-    nmix = int(argv[1])
-    test1(nmix)
