@@ -100,4 +100,7 @@ subroutine viterbi_F(T,N,lnpi,lnA,lnf,z,lnP)
         z(tt) = imax(1)
     enddo
 
+    ! make numbering consistent to that of python
+    z(:) = z(:) - 1
+
 end subroutine
