@@ -1,10 +1,9 @@
 import numpy as np
-from numpy.random import dirichlet
 from scipy.cluster import vq
 from scipy.special import digamma
 from .vbhmm import _BaseVBHMM
 
-from .util import log_like_Gauss2, normalize
+from .util import log_like_Gauss2
 from .moments import *
 
 # import Fortran95 extension module
@@ -12,10 +11,12 @@ from . import _hmmf
 extF_imported = True
 default_ext = "F"
 
+BIGNUMBER = 1.0e10
+
 class _BaseMEHMM(_BaseVBHMM):
     """
-    This is a base class for HMM with Variational Bayesian Learning
-    All VB-HMM should be an inheritant of this class
+    This is a base class for HMM with Maximization Expectation Learning
+    All ME-HMM should be an inheritant of this class
     """
       
     def eval_hidden_states(self,obs,use_ext=default_ext,multi=False):
@@ -35,8 +36,15 @@ class _BaseMEHMM(_BaseVBHMM):
 #        else :
         if True:
             lnf = self._log_like_f(obs)
-            z, lnP = _hmmf.viterbi_f(self._lnpi,self._lnA,lnf)
+            z, lnP = self._E_step(lnf,use_ext)
             return z, lnP    
+            
+    def decode(self,obs,use_ext=default_ext,multi=False):
+        """
+        Get the most probable cluster id
+        """
+        z,lnP = self.eval_hidden_states(obs,use_ext,multi)
+        return z
     
     
     def fit(self,obs,niter=10000,eps=1.0e-4,ifreq=10,\
@@ -47,12 +55,12 @@ class _BaseMEHMM(_BaseVBHMM):
         if init:
             self._initialize_HMM(obs)
             old_F = 1.0e20
-            lnalpha, lnbeta, lneta = self._allocate_temp(obs)
+            print set(self.z)            
             
         for i in xrange(niter):
             # VB-E step
             lnf = self._log_like_f(obs)
-            lneta,lngamma, lnP = self._E_step(lnf,lnpi,lnA,use_ext)
+            self.z, lnP = self._E_step(lnf,use_ext)
 
             # check convergence
             KL = self._KL_div()
@@ -70,7 +78,7 @@ class _BaseMEHMM(_BaseVBHMM):
             old_F = F
 
             # update parameters via VB-M step
-            self._M_step()
+            self._M_step(obs,multi=False)
 
         return self
 
@@ -135,9 +143,13 @@ class _BaseMEHMM(_BaseVBHMM):
 #    
 #        return self
 
-    def _E_step(lnf,use_ext=default_ext):
+    def _E_step(self,lnf,use_ext=default_ext):
         z, lnP = _hmmf.viterbi_f(self._lnpi,self._lnA,lnf)
-        return z, lnP  
+        return np.array(z,dtype=np.int32), lnP  
+        
+    def _M_step(self,obs,multi=False):
+        self._calculate_sufficient_statistics(obs,multi)
+        self._update_parameters(obs,multi)
         
     def _calculate_sufficient_statistics(self,obs,multi=False):
         pass
@@ -148,7 +160,7 @@ class _BaseMEHMM(_BaseVBHMM):
 #            # z[n,k] = Q(Zn=k)
 #            self.z = np.exp(lngamma)
 
-    def _update_parameters(self,obs,lneta,lngamma,multi=False):
+    def _update_parameters(self,obs,multi=False):
 
         # update parameters of initial prob 
         
@@ -169,14 +181,18 @@ class _BaseMEHMM(_BaseVBHMM):
         for k in xrange(self._nstates):
             
             # the position of z[t+1] s.t. z[t] == k
-            mask = np.where(self.z == k) + 1
+            mask = np.where(self.z == k)[0] + 1
+            
+            if len(mask) == 0:
+                continue
             
             # remove terminal if exceeded total samples
             if mask[-1] == len(self.z):
                 mask = mask[:-1]
             
             # update WA
-            self._WA[k,:] += np.bincount(z[mask])
+            n_trans = np.bincount(self.z[mask])
+            self._WA[k,:len(n_trans)] += n_trans 
                 
         self._lnA = digamma(self._WA) - digamma(self._WA)
         
@@ -205,21 +221,22 @@ class _BaseMEHMM(_BaseVBHMM):
 #            self._lnB[:,j] = digamma(self._WB[:,j]) \
 #                    - digamma(self._WB[:,j].sum())
 
-class VBGaussianHMM(_BaseVBHMM):
+class MEGaussianHMM(_BaseMEHMM):
     """
-    VB-HMM with Gaussian emission probability.
-    VB-E step is Forward-Backward Algorithm.
+    ME-HMM with Gaussian emission probability.
+    ME-E step is Viterbi Algorithm.
     Parameter estimation is almost same as VBGMM.
     """
     def __init__(self,N,uPi0=0.5,uA0=0.5,m0=0.0,beta0=1,nu0=1,s0=0.01):
-        _BaseVBHMM.__init__(self,N,uPi0,uA0)
+        _BaseMEHMM.__init__(self,N,uPi0,uA0)
         self._m0 = m0
         self._beta0 = beta0
         self._nu0 = nu0
         self._s0 = s0
+        self._N = np.zeros(N)
         
     def _initialize_HMM(self,obs,params="ms",scale=10.0):
-        _BaseHMM._initialize_HMM(self,obs)
+        _BaseMEHMM._initialize_HMM(self,obs)
         nmix = self._nstates
         T,D = obs.shape
         if self._nu0 < D:
@@ -229,37 +246,51 @@ class VBGaussianHMM(_BaseVBHMM):
         if "s" in params:
             self._V0 = np.cov(obs.T) * scale
 
-        #posterior for hidden states
-        self.z = dirichlet(np.tile(1.0/nmix,nmix),T)
-        # for mean vector
-        self._m, temp = vq.kmeans2(obs,nmix)
-        self._beta = np.tile(self._beta0,nmix)
+        # for mean vector and hidden states
+        self._m, self.z = vq.kmeans2(obs,nmix)
+        count = np.bincount(self.z)
+        self._N[:len(count)] = count[:]
+        self._beta = self._beta0 + self._N
         # for covarience matrix
         self._V = np.tile(np.array(self._V0),(nmix,1,1))
-        self._nu = self.nu = np.tile(float(T)/nmix,nmix)
+        self._nu = self._nu0 + self._N
 
         # aux
+        self._xbar = np.array(self._m)
         self._C = np.array(self._V)
     
     def _log_like_f(self,obs):
         return log_like_Gauss2(obs,self._nu,self._V,self._beta,self._m)
     
-    def _calculate_sufficient_statistics(self,obs,lneta,lngamma,multi=False):
+    def _calculate_sufficient_statistics(self,obs,multi=False):
         nmix = self._nstates
         T,D = obs.shape
-        _BaseVBHMM._calculate_sufficient_statistics(\
-                self,obs,lneta,lngamma,multi)
-        self._N = self.z.sum(0)
-        self._xbar = np.dot(self.z.T,obs) / self._N[:,np.newaxis]
-        for k in xrange(nmix):
-            dobs = obs - self._xbar[k]
-            self._C[k] = np.dot((self.z[:,k]*dobs.T),dobs)
-        
 
-    def _update_parameters(self,obs,lneta,lngamma,multi=False):
+        count = np.bincount(self.z)
+        self._N[:] = 0
+        self._N[:len(count)] = count[:]
+        
+        for k in xrange(nmix):
+            mask = (self.z == k)
+            
+            # ignore empty cluster 
+            if self._N[k] == 0:
+                self._xbar[k] = 1.0e50
+                self._C[k] = np.identity(D)
+
+            else :
+                self._xbar[k] = np.mean(obs[mask])
+                
+                # assign a big covar if only one sample                
+                if self._N[k] == 1:
+                    self._C[k] = np.identity(D) * BIGNUMBER
+                else:
+                    self._C[k] = np.cov(obs[mask].T) * self._N[k]
+
+    def _update_parameters(self,obs,multi=False):
         nmix = self._nstates
         T,D = obs.shape
-        _BaseVBHMM._update_parameters(self,obs,lneta,lngamma,multi)
+        _BaseMEHMM._update_parameters(self,obs,multi)
         self._beta = self._beta0 + self._N
         self._nu = self._nu0 + self._N
         self._V = self._V0 + self._C
@@ -272,7 +303,7 @@ class VBGaussianHMM(_BaseVBHMM):
                 
     def _KL_div(self):
         nmix = self._nstates
-        KL = _BaseVBHMM._KL_div(self)
+        KL = _BaseMEHMM._KL_div(self)
         for k in xrange(nmix):
             KLg = KL_GaussWishart(self._nu[k],self._V[k],self._beta[k],\
                 self._m[k],self._nu0,self._V0,self._beta0,self._m0)
@@ -283,7 +314,7 @@ class VBGaussianHMM(_BaseVBHMM):
         """
         Calculate expectations of parameters over posterior distribution
         """
-        _BaseVBHMM.getExpectations(self)
+        _BaseMEHMM.getExpectations(self)
         # <mu_k>_Q(mu_k,W_k)
         self.mu = np.array(self._m)
 
@@ -295,7 +326,7 @@ class VBGaussianHMM(_BaseVBHMM):
         
     def showModel(self,show_pi=True,show_A=True,show_mu=False,\
         show_cv=False,eps=1.0e-2):
-        ids, pi, A = _BaseVBHMM.showModel(self,show_pi,show_A,eps)
+        ids, pi, A = _BaseMEHMM.showModel(self,show_pi,show_A,eps)
         mu = self.mu[ids]
         cv = self.cv[ids]
         for k in range(len(ids)):
