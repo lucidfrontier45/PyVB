@@ -458,6 +458,57 @@ class GaussianHMM(_BaseHMM):
             self.mu[k] = np.dot(post,obs) * norm
             avg_cv = np.dot(post * obs.T, obs) * norm
             self.cv[k] = avg_cv - np.outer(self.mu[k], self.mu[k])
+            
+    def getClustPos(self,obs,use_ext=default_ext,multi=False,eps=1.0e-2):
+        ids,pi,A,m,cv = self.showModel(eps=eps)
+        codes = self.decode(obs,use_ext,multi)
+        clust_pos = []
+        for k in ids:
+            clust_pos.append(codes==k)
+        return clust_pos
+
+    def plot1d(self,obs,d1=0,eps=0.01,use_ext=default_ext,\
+            multi=False,clust_pos=None):
+        symbs = ".hd^x+"
+        if multi :
+            obs2 = np.vstack(obs)
+        else :
+            obs2 = obs
+            
+        l = np.arange(len(obs2))
+        if clust_pos == None:
+            clust_pos = self.getClustPos(obs,use_ext,multi,eps)
+        try :
+            import matplotlib.pyplot as plt
+        except ImportError :
+            print "cannot import pyplot"
+            return
+        for k,pos in enumerate(clust_pos):
+            symb = symbs[k / 6]
+            plt.plot(l[pos],obs2[pos,d1],symb,label="%3dth cluster"%k)
+        plt.legend(loc=0)
+        plt.show()
+
+    def plot2d(self,obs,d1=0,d2=1,eps=0.01,use_ext=default_ext,\
+            multi=False,clust_pos=None):
+        symbs = ".hd^x+"
+        if multi :
+            obs2 = np.vstack(obs)
+        else :
+            obs2 = obs
+            
+        if clust_pos == None:
+            clust_pos = self.getClustPos(obs,use_ext,multi,eps)
+        try :
+            import matplotlib.pyplot as plt
+        except ImportError :
+            print "cannot import pyplot"
+            return
+        for k,pos in enumerate(clust_pos):
+            symb = symbs[k / 6]
+            plt.plot(obs2[pos,d1],obs2[pos,d2],symb,label="%3dth cluster"%k)
+        plt.legend(loc=0)
+        plt.show()
 
 test_model = GaussianHMM(3)
 test_model.mu = np.array([[0.0,0.0],[1.0,3.0],[-3.0,0.0]])

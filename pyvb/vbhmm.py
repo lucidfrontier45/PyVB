@@ -243,7 +243,7 @@ class VBGaussianHMM(_BaseVBHMM):
         self._beta = np.tile(self._beta0,nmix)
         # for covarience matrix
         self._V = np.tile(np.array(self._V0),(nmix,1,1))
-        self._nu = self.nu = np.tile(float(T)/nmix,nmix)
+        self._nu = np.tile(float(T)/nmix,nmix)
 
         # aux
         self._C = np.array(self._V)
