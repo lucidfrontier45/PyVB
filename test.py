@@ -28,17 +28,19 @@ def test_HMM(N=5,T=10,multi=False,**keywards):
     from pyvb.hmm import GaussianHMM
     ifreq = 10
     model = GaussianHMM(N)
-    os = []
-    zs = []
-    for i in range(T):
-        z,o = test_model.simulate(50)
-        os.append(o)
-        zs.append(z)
-    o2 = np.vstack(os)
-    if multi:
-        model.fit_multi(os,ifreq=ifreq)
-    else:
-        model.fit(o2,ifreq=ifreq)
+    z,o2 = test_model.simulate(50*T)
+    model.fit(o2,ifreq=ifreq)
+#    os = []
+#    zs = []
+#    for i in range(T):
+#        z,o = test_model.simulate(50)
+#        os.append(o)
+#        zs.append(z)
+#    o2 = np.vstack(os)
+#    if multi:
+#        model.fit_multi(os,ifreq=ifreq)
+#    else:
+#        model.fit(o2,ifreq=ifreq)
     model.showModel(True,True,True,True)
     model.plot2d(o2)
 
@@ -47,17 +49,20 @@ def test_VBHMM(N=5,T=10,multi=False,**keywards):
     from pyvb.vbhmm import VBGaussianHMM
     ifreq = 10
     model = VBGaussianHMM(N)
-    os = []
-    zs = []
-    for i in range(T):
-        z,o = test_model.simulate(50)
-        os.append(o)
-        zs.append(z)
-    o2 = np.vstack(os)
-    if multi:
-        model.fit_multi(os,ifreq=ifreq)
-    else:
-        model.fit(o2,ifreq=ifreq)
+    z,o2 = test_model.simulate(50*T)
+    model.fit(o2,ifreq=ifreq)
+
+#    os = []
+#    zs = []
+#    for i in range(T):
+#        z,o = test_model.simulate(50)
+#        os.append(o)
+#        zs.append(z)
+#    o2 = np.vstack(os)
+#    if multi:
+#        model.fit_multi(os,ifreq=ifreq)
+#    else:
+#        model.fit(o2,ifreq=ifreq)
     model.showModel(True,True,True,True)
     model.plot2d(o2)
     
@@ -65,17 +70,20 @@ def test_MEHMM(N=5,T=10,multi=False,**keywards):
     from pyvb.mehmm import MEGaussianHMM
     ifreq = 10
     model = MEGaussianHMM(N)
-    os = []
-    zs = []
-    for i in range(T):
-        z,o = test_model.simulate(50)
-        os.append(o)
-        zs.append(z)
-    o2 = np.vstack(os)
-    if multi:
-        model.fit_multi(os,ifreq=ifreq)
-    else:
-        model.fit(o2,ifreq=ifreq)
+    z,o2 = test_model.simulate(50*T)
+    model.fit(o2,ifreq=ifreq)
+
+#    os = []
+#    zs = []
+#    for i in range(T):
+#        z,o = test_model.simulate(50)
+#        os.append(o)
+#        zs.append(z)
+#    o2 = np.vstack(os)
+#    if multi:
+#        model.fit_multi(os,ifreq=ifreq)
+#    else:
+#        model.fit(o2,ifreq=ifreq)
     model.showModel(True,True,True,True)
     model.plot2d(o2)
 
