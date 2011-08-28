@@ -45,8 +45,7 @@ class _BaseMEHMM(_BaseVBHMM):
         """
         z,lnP = self.eval_hidden_states(obs,use_ext,multi)
         return z
-    
-    
+        
     def fit(self,obs,niter=10000,eps=1.0e-4,ifreq=10,\
             init=True,use_ext=default_ext):
         """
@@ -66,6 +65,7 @@ class _BaseMEHMM(_BaseVBHMM):
             KL = self._KL_div()
             F = -lnP + KL
             dF = F - old_F
+    
             if(abs(dF) < eps):
                 print "%8dth iter, Free Energy = %12.6e, dF = %12.6e" %(i,F,dF)
                 print "%12.6e < %12.6e Converged" %(dF, eps)
@@ -194,11 +194,8 @@ class _BaseMEHMM(_BaseVBHMM):
             n_trans = np.bincount(self.z[mask])
             self._WA[k,:len(n_trans)] += n_trans 
                 
-        self._lnA = digamma(self._WA) - digamma(self._WA)
-        
         for k in xrange(self._nstates):
             self._lnA[k,:] = E_lnpi_Dirichlet(self._WA[k,:])
-        
         
 #class VBMultinomialHMM(_BaseVBHMM):
 #    def __init__(self,N,M,uPi0=0.5,uA0=0.5,uB0=0.5):
@@ -261,6 +258,15 @@ class MEGaussianHMM(_BaseMEHMM):
     
     def _log_like_f(self,obs):
         return log_like_Gauss2(obs,self._nu,self._V,self._beta,self._m)
+        
+    def _KL_div(self):
+        nmix = self._nstates
+        KL = _BaseVBHMM._KL_div(self)
+        for k in xrange(nmix):
+            KLg = KL_GaussWishart(self._nu[k],self._V[k],self._beta[k],\
+                self._m[k],self._nu0,self._V0,self._beta0,self._m0)
+            KL += KLg
+        return KL
     
     def _calculate_sufficient_statistics(self,obs,multi=False):
         nmix = self._nstates
@@ -275,11 +281,11 @@ class MEGaussianHMM(_BaseMEHMM):
             
             # ignore empty cluster 
             if self._N[k] == 0:
-                self._xbar[k] = 1.0e50
-                self._C[k] = np.identity(D)
+                self._xbar[k] = 0.0
+                self._C[k] = 0.0
 
             else :
-                self._xbar[k] = np.mean(obs[mask])
+                self._xbar[k] = np.mean(obs[mask],0)
                 
                 # assign a big covar if only one sample                
                 if self._N[k] == 1:
@@ -295,21 +301,16 @@ class MEGaussianHMM(_BaseMEHMM):
         self._nu = self._nu0 + self._N
         self._V = self._V0 + self._C
         for k in xrange(nmix):
-            self._m[k] = (self._beta0 * self._m0 + self._N[k] * self._xbar[k])\
-                        / self._beta[k]
-            dx = self._xbar[k] - self._m0
-            self._V[k] += (self._beta0 * self._N[k] / self._beta[k]) \
-                * np.outer(dx, dx)
-                
-    def _KL_div(self):
-        nmix = self._nstates
-        KL = _BaseMEHMM._KL_div(self)
-        for k in xrange(nmix):
-            KLg = KL_GaussWishart(self._nu[k],self._V[k],self._beta[k],\
-                self._m[k],self._nu0,self._V0,self._beta0,self._m0)
-            KL += KLg
-        return KL
-        
+            if self._N[k] == 0:
+                self._m[k] = self._m0[:]
+                self._V[k] = self._V0[:]
+            else:                
+                self._m[k] = (self._beta0 * self._m0 + self._N[k] * self._xbar[k])\
+                            / self._beta[k]
+                dx = self._xbar[k] - self._m0
+                self._V[k] += (self._beta0 * self._N[k] / self._beta[k]) \
+                    * np.outer(dx, dx)
+                    
     def getExpectations(self):
         """
         Calculate expectations of parameters over posterior distribution
