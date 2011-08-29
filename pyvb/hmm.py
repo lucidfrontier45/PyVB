@@ -511,7 +511,7 @@ class GaussianHMM(_BaseHMM):
         plt.show()
 
 test_model = GaussianHMM(3)
-test_model.mu = np.array([[0.0,0.0],[1.0,3.0],[-3.0,0.0]])
+test_model.mu = np.array([[3.0,3.0],[0.0,0.0],[-4.0,0.0]])
 test_model.cv = np.tile(np.identity(2),(3,1,1))
 test_model.lnA = np.log([[0.9,0.05,0.05],[0.1,0.7,0.2],[0.1,0.4,0.5]])
 

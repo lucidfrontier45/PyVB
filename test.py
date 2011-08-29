@@ -41,7 +41,8 @@ def test_HMM(N=5,T=10,multi=False,**keywards):
 #        model.fit_multi(os,ifreq=ifreq)
 #    else:
 #        model.fit(o2,ifreq=ifreq)
-    model.showModel(True,True,True,True)
+    z2 = model.decode(o2)
+    model.showModel(True,True,True,True)[0]
     model.plot2d(o2)
 
 
@@ -63,7 +64,8 @@ def test_VBHMM(N=5,T=10,multi=False,**keywards):
 #        model.fit_multi(os,ifreq=ifreq)
 #    else:
 #        model.fit(o2,ifreq=ifreq)
-    model.showModel(True,True,True,True)
+    z2 = model.decode(o2)
+    model.showModel(True,True,True,True)[0]
     model.plot2d(o2)
     
 def test_MEHMM(N=5,T=10,multi=False,**keywards):
@@ -84,7 +86,8 @@ def test_MEHMM(N=5,T=10,multi=False,**keywards):
 #        model.fit_multi(os,ifreq=ifreq)
 #    else:
 #        model.fit(o2,ifreq=ifreq)
-    model.showModel(True,True,True,True)
+    z2 = model.decode(o2)
+    model.showModel(True,True,True,True)[0]
     model.plot2d(o2)
 
 def test_moments(**keywards):
@@ -109,7 +112,6 @@ tests = {"EMGMM":test_EMGMM,"VBGMM":test_VBGMM,"DPGMM":test_DPGMM,\
     "HMM":test_HMM,"VBHMM":test_VBHMM,"MEHMM":test_MEHMM,"moments":test_moments}
 
 if __name__ == "__main__":
-    from sys import argv
     from optparse import OptionParser
     parser = OptionParser()
     parser.add_option("-m","--mode",dest="mode",default="VBGMM",\
@@ -118,6 +120,9 @@ if __name__ == "__main__":
       help="Number of hidden states")
     parser.add_option("-t","--Total",dest="t",type="int",default=10,\
       help="Number of independent sequences, only needed for hmm test")
+    parser.add_option("-r","--rseed",dest="rseed",type="int",\
+      help="Seed of the random number generator")
+      
     options, args = parser.parse_args()
-    
+    np.random.seed(options.rseed)
     tests[options.mode.upper()](N=options.n,T=options.t)    
