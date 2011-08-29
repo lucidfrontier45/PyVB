@@ -11,7 +11,6 @@ from . import _hmmf
 extF_imported = True
 default_ext = "F"
 
-BIGNUMBER = 1.0e10
 
 class _BaseMEHMM(_BaseVBHMM):
     """
@@ -46,7 +45,7 @@ class _BaseMEHMM(_BaseVBHMM):
         z,lnP = self.eval_hidden_states(obs,use_ext,multi)
         return z
         
-    def fit(self,obs,niter=10000,eps=1.0e-4,ifreq=10,\
+    def fit(self,obs,niter=10000,eps=1.0e-6,ifreq=10,\
             init=True,use_ext=default_ext):
         """
         Fit the HMM via VB-EM algorithm
@@ -241,7 +240,7 @@ class MEGaussianHMM(_BaseMEHMM):
         if "m" in params:
             self._m0 = np.mean(obs,0)
         if "s" in params:
-            self._V0 = np.cov(obs.T) * scale
+            self._V0 = np.cov(obs.T,bias=1) * scale
 
         # for mean vector and hidden states
         self._m, self.z = vq.kmeans2(obs,nmix)
@@ -286,12 +285,7 @@ class MEGaussianHMM(_BaseMEHMM):
 
             else :
                 self._xbar[k] = np.mean(obs[mask],0)
-                
-                # assign a big covar if only one sample                
-                if self._N[k] == 1:
-                    self._C[k] = np.identity(D) * BIGNUMBER
-                else:
-                    self._C[k] = np.cov(obs[mask].T) * self._N[k]
+                self._C[k] = np.cov(obs[mask].T,bias=1) * self._N[k] 
 
     def _update_parameters(self,obs,multi=False):
         nmix = self._nstates
