@@ -55,7 +55,7 @@ class EMGMM:
         # initialize mean vectors with K-Means clustering
         self.mu, temp = vq.kmeans2(obs,nmix)
         # initialize covariance matrices with sample covariance matrix
-        self.cv = np.tile(np.cov(obs.T),(nmix,1,1))
+        self.cv = np.tile(np.atleast_2d(np.cov(obs.T)),(nmix,1,1))
 
     def showModel(self,show_mu=False,show_cv=False,min_pi=0.01):
         """

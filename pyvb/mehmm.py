@@ -240,7 +240,7 @@ class MEGaussianHMM(_BaseMEHMM):
         if "m" in params:
             self._m0 = np.mean(obs,0)
         if "s" in params:
-            self._V0 = np.cov(obs.T,bias=1) * scale
+            self._V0 = np.atleast_2d(np.cov(obs.T,bias=1)) * scale
 
         # for mean vector and hidden states
         self._m, self.z = vq.kmeans2(obs,nmix)
@@ -285,7 +285,8 @@ class MEGaussianHMM(_BaseMEHMM):
 
             else :
                 self._xbar[k] = np.mean(obs[mask],0)
-                self._C[k] = np.cov(obs[mask].T,bias=1) * self._N[k] 
+                self._C[k] = np.atleast_2d(
+                        np.cov(obs[mask].T,bias=1)) * self._N[k] 
 
     def _update_parameters(self,obs,multi=False):
         nmix = self._nstates

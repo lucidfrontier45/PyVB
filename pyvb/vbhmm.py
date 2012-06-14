@@ -234,7 +234,7 @@ class VBGaussianHMM(_BaseVBHMM):
         if "m" in params:
             self._m0 = np.mean(obs,0)
         if "s" in params:
-            self._V0 = np.cov(obs.T) * scale
+            self._V0 = np.atleast_2d(np.cov(obs.T)) * scale
 
         #posterior for hidden states
         self.z = dirichlet(np.tile(1.0/nmix,nmix),T)

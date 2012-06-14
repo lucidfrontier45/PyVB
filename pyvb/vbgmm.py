@@ -66,7 +66,7 @@ class VBGMM(EMGMM):
         if adjust_prior:
             # adjust prior with observed data
             self._m0 = obs.mean(0)
-            self._V0 = np.cov(obs.T) * self._V0
+            self._V0 = np.atleast_2d(np.cov(obs.T)) * self._V0
         else:
             # use simple prior
             self._m0 = np.zeros(ndim)
